@@ -4,3 +4,4 @@
 """
 
 from .supervised_problem import SupervisedProblem
+from .self_supervised_problem import SelfSupervisedProblem
