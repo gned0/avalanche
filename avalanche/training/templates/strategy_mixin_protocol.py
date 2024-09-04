@@ -100,6 +100,14 @@ class SupervisedStrategyProtocol(
     mb_y: Tensor
 
     mb_task_id: Tensor
+    
+class SelfSupervisedStrategyProtocol(
+    SGDStrategyProtocol[TSGDExperienceType, TMBInput, TMBOutput],
+    Protocol[TSGDExperienceType, TMBInput, TMBOutput],
+):
+    mb_x: Tensor
+
+    mb_task_id: Tensor
 
 
 class MetaLearningStrategyProtocol(
