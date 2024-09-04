@@ -328,6 +328,17 @@ class SupervisedPlugin(BaseSGDPlugin[Template], ABC):
         """
         super().__init__()
 
+class SelfSupervisedPlugin(BaseSGDPlugin[Template], ABC):
+    """ABC for SupervisedTemplate plugins.
+
+    See `BaseTemplate` for complete description of the train/eval loop.
+    """
+
+    def __init__(self):
+        """
+        Inizializes an instance of a supervised plugin.
+        """
+        super().__init__()
 
 class SupervisedMetaLearningPlugin(SupervisedPlugin[Template], ABC):
     """ABC for SupervisedMetaLearningTemplate plugins.
