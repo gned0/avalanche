@@ -167,7 +167,7 @@ class LossPluginMetric(GenericPluginMetric[float, LossMetric]):
         return self._metric.result()
 
     def update(self, strategy):
-        self._loss.update(strategy.loss, patterns=len(strategy.mb_y))
+        self._loss.update(strategy.loss, patterns=len(strategy.mb_x))
 
 
 class LossPerTaskPluginMetric(GenericPluginMetric[Dict[int, float], TaskAwareLoss]):
