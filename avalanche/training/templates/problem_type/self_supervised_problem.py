@@ -3,13 +3,10 @@ from avalanche.training.templates.strategy_mixin_protocol import (
     SupervisedStrategyProtocol,
     TSGDExperienceType,
     TMBInput,
-    TMBOutput,
+    TMBOutput, SelfSupervisedStrategyProtocol,
 )
 
 
-# Types are perfectly ok for MyPy
-# Also confirmed here: https://stackoverflow.com/a/70907644
-# PyLance just does not understand it
 class SelfSupervisedProblem(
     SelfSupervisedStrategyProtocol[TSGDExperienceType, TMBInput, TMBOutput]
 ):
@@ -32,8 +29,8 @@ class SelfSupervisedProblem(
         return mbatch[-1]
 
     def criterion(self):
-        """Loss function for supervised problems."""
-        return self._criterion(self.mb_output)
+        """Loss function for self-supervised problems."""
+        return self._criterion(self.mb_output[0], self.mb_output[1], self.mb_output[2], self.mb_output[3])
 
     def forward(self):
         """Compute the model's output given the current mini-batch."""
@@ -41,6 +38,7 @@ class SelfSupervisedProblem(
         if hasattr(self.experience, "task_labels"):
             return avalanche_forward(self.model, self.mb_x, self.mb_task_id)
         else:
+            print("Calling forward step in model")
             return self.model(self.mb_x)
 
     def _unpack_minibatch(self):

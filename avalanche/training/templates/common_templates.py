@@ -6,7 +6,7 @@ from torch.nn import Module, CrossEntropyLoss
 from torch.optim import Optimizer
 from avalanche.benchmarks import DatasetExperience
 
-from avalanche.core import BasePlugin, SupervisedPlugin
+from avalanche.core import BasePlugin, SupervisedPlugin, SelfSupervisedPlugin
 from avalanche.training.plugins.evaluation import (
     EvaluationPlugin,
     default_evaluator,
@@ -156,7 +156,7 @@ class SelfSupervisedTemplate(
         *,
         model: Module,
         optimizer: Optimizer,
-        criterion: CriterionType = CrossEntropyLoss(),
+        criterion: CriterionType,
         train_mb_size: int = 1,
         train_epochs: int = 1,
         eval_mb_size: Optional[int] = 1,
@@ -322,9 +322,6 @@ class SupervisedMetaLearningTemplate(
         else:
             super().__init__()
             BaseSGDTemplate.__init__(self=self, **kwargs)
-
-
-
 
 
 __all__ = [
