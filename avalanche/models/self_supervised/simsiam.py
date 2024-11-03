@@ -1,5 +1,8 @@
 import torch.nn
+from torchvision.transforms import transforms
+
 from avalanche.models.base_model import BaseModel
+from avalanche.models.self_supervised import loader
 
 """Things that can be generalized such as image transformation and backbones are here
 'soldered' to the model. This is not a good practice, but it is a simple way to prototype
@@ -22,11 +25,24 @@ class SimSiam(torch.nn.Module):
          L.backward() # back-propagate
          update(f, h) # SGD update
          def D(p, z): # negative cosine similarity
-         z = z.detach() # stop gradient
-         p = normalize(p, dim=1) # l2-normalize
-         z = normalize(z, dim=1) # l2-normalize
-         return-(p*z).sum(dim=1).mean()
+            z = z.detach() # stop gradient
+            p = normalize(p, dim=1) # l2-normalize
+            z = normalize(z, dim=1) # l2-normalize
+            return-(p*z).sum(dim=1).mean()
         """
+        self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+
+        self.augmentation =  [
+        transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+        transforms.RandomApply([
+            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
+        ], p=0.8),
+        transforms.RandomGrayscale(p=0.2),
+        transforms.RandomApply([loader.GaussianBlur([.1, 2.])], p=0.5),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        self.normalize
+    ]
 
         self.encoder = torch.nn.Sequential(
             torch.nn.Conv2d(1, 32, 3, 1),
