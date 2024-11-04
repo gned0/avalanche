@@ -1,7 +1,9 @@
 import torch.nn
+from torch import nn
 from torchvision.transforms import transforms
 
-from avalanche.models.base_model import BaseModel
+from avalanche import models
+import torchvision.models as models
 from avalanche.models.self_supervised import loader
 
 """Things that can be generalized such as image transformation and backbones are here
@@ -9,7 +11,12 @@ from avalanche.models.self_supervised import loader
 a self-supervised model and test its integration with Avalanche"""
 
 class SimSiam(torch.nn.Module):
-    def __init__(self, hidden_size: int = 2048, projection_size: int = 256):
+    def __init__(self,
+                 input_size: int = 28 * 28,
+                 proj_hidden_dim: int = 2048,
+                 proj_output_dim: int = 256,
+                 pred_hidden_dim: int = 512,
+                 ):
         super().__init__()
 
         """
@@ -31,38 +38,47 @@ class SimSiam(torch.nn.Module):
             return-(p*z).sum(dim=1).mean()
         """
         self.normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        self.augmentation = transforms.Compose([
+            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+            transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.RandomApply([loader.GaussianBlur([.1, 2.])], p=0.5),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            self.normalize
+        ])
 
-        self.augmentation =  [
-        transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.RandomApply([loader.GaussianBlur([.1, 2.])], p=0.5),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        self.normalize
-    ]
+        self.backbone = models.resnet50(pretrained=True)
 
-        self.encoder = torch.nn.Sequential(
-            torch.nn.Conv2d(1, 32, 3, 1),
-            torch.nn.ReLU(),
-            torch.nn.Conv2d(32, 64, 3, 1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(2),
-            torch.nn.Flatten(),
-            torch.nn.Linear(9216, hidden_size),
-            torch.nn.ReLU(),
-            torch.nn.Linear(hidden_size, projection_size),
+        self.backbone.fc = nn.Identity() # remove classification head
+
+        self.projector = nn.Sequential(
+            nn.Linear(2048, proj_hidden_dim, bias=False),
+            nn.BatchNorm1d(proj_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(proj_hidden_dim, proj_hidden_dim, bias=False),
+            nn.BatchNorm1d(proj_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(proj_hidden_dim, proj_output_dim),
+            nn.BatchNorm1d(proj_output_dim, affine=False),
         )
+        self.projector[6].bias.requires_grad = False
 
-        self.predictor = torch.nn.Sequential(
-            torch.nn.Linear(projection_size, projection_size),
-            torch.nn.ReLU(),
-            torch.nn.Linear(projection_size, projection_size),
+        self.predictor = nn.Sequential(
+            nn.Linear(proj_output_dim, pred_hidden_dim, bias=False),
+            nn.BatchNorm1d(pred_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(pred_hidden_dim, proj_output_dim),
         )
 
     def forward(self, x):
-        z = self.encoder(x)
-        p = self.predictor(z)
-        return z, z, p, p
+        x1, x2 = x, x # aug on Tensors to be fixed later
+
+        z1 = self.projector(self.backbone(x1))
+        z2 = self.projector(self.backbone(x2))
+
+        p1 = self.predictor(z1)
+        p2 = self.predictor(z2)
+
+        return p1, p2, z1, z2
+
