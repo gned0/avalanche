@@ -1,6 +1,6 @@
 import torch
 from os.path import expanduser
-
+from torch import nn
 from avalanche.training.self_supervised.strategy_wrappers.self_naive import SelfNaive
 
 """
@@ -14,7 +14,6 @@ from avalanche.evaluation.metrics import (
 from avalanche.training.plugins import EvaluationPlugin
 from avalanche.benchmarks.classic import SplitMNIST
 from avalanche.logging import InteractiveLogger
-from avalanche.training.supervised import FromScratchTraining
 from avalanche.training.self_supervised_losses import SimSiamLoss
 from avalanche.models.self_supervised import SimSiam
 
@@ -35,7 +34,18 @@ def main():
         loggers=[interactive_logger],
     )
 
-    self_supervised_model = SimSiam(hidden_size=128)
+    self_supervised_model = SimSiam()
+
+    # adapt input layer for MNIST
+    self_supervised_model.backbone.conv1 = nn.Conv2d(
+        in_channels=1,
+        out_channels=64,
+        kernel_size=(7, 7),
+        stride=(2, 2),
+        padding=(3, 3),
+        bias=False
+    )
+
     optimizer = torch.optim.SGD(self_supervised_model.parameters(), lr=0.01)
     criterion = SimSiamLoss()
 
