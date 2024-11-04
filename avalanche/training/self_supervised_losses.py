@@ -1,7 +1,7 @@
 import torch.nn as nn
 
 class SimSiamLoss(nn.Module):
-    def __init__(self, criterion=nn.CosineSimilarity()):
+    def __init__(self, criterion=nn.CosineSimilarity(dim=1)):
         super().__init__()
         self.criterion = criterion
 
@@ -9,4 +9,4 @@ class SimSiamLoss(nn.Module):
         # stop gradient on projections to avoid collapse
         z1 = z1.detach()
         z2 = z2.detach()
-        return 0.5 * (self.criterion(p1, z2).mean() + self.criterion(p2, z1).mean())
+        return -(self.criterion(p1, z2).mean() + self.criterion(p2, z1).mean()) * 0.5
