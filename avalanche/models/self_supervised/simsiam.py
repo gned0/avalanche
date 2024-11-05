@@ -82,3 +82,10 @@ class SimSiam(torch.nn.Module):
 
         return p1, p2, z1, z2
 
+    def freeze_backbone(self):
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+
+    def unfreeze_backbone(self):
+        for param in self.backbone.parameters():
+            param.requires_grad = True
