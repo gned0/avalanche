@@ -14,8 +14,7 @@ from avalanche.training.plugins import EvaluationPlugin
 from avalanche.benchmarks.classic import SplitMNIST
 from avalanche.logging import InteractiveLogger
 from avalanche.training.self_supervised_losses import SimSiamLoss
-from avalanche.models.self_supervised import SimSiam
-from avalanche.models.self_supervised import TwoCropsTransform
+from avalanche.models.self_supervised import SimSiam, SimSiamLoader
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -26,7 +25,7 @@ def main():
     # create the benchmark
     benchmark = SplitMNIST(
         n_experiences=1, dataset_root=expanduser("~") + "/.avalanche/data/mnist/",
-        train_transform=TwoCropsTransform(self_supervised_model.augmentation),
+        train_transform=SimSiamLoader((0.1307,), (0.3081,), 58)
     )
 
     # choose some metrics and evaluation method

@@ -1,7 +1,8 @@
 import torch.nn
 from torch import nn
 from torchvision.transforms import transforms
-
+from PIL import ImageFilter
+import random
 from avalanche import models
 import torchvision.models as models
 
@@ -36,20 +37,8 @@ class SimSiam(torch.nn.Module):
             z = normalize(z, dim=1) # l2-normalize
             return-(p*z).sum(dim=1).mean()
         """
-        self.normalize = transforms.Normalize(mean=[0.5], std=[0.5])
-        self.augmentation = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomResizedCrop(58, scale=(0.2, 1.)),
-            transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            self.normalize
-        ])
 
         self.backbone = models.resnet50(pretrained=True)
-
         self.backbone.fc = nn.Identity() # remove classification head
 
         self.projector = nn.Sequential(
@@ -91,35 +80,60 @@ class SimSiam(torch.nn.Module):
         for param in self.backbone.parameters():
             param.requires_grad = True
 
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
+class SimSiamLoader:
+    def __init__(self, mean, std, size):
+        """
+        Initialize the SimSiam loader with configurable normalization parameters and image size.
 
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
+        :param mean: Mean value for normalization
+        :param std: Standard deviation value for normalization
+        :param size: Target size for image resizing
+        """
+        self.mean = mean
+        self.std = std
+        self.size = size
 
-from PIL import ImageFilter
-import random
+        # Define the normalize transform
+        self.normalize = transforms.Normalize(mean=self.mean, std=self.std)
 
+        # Define the augmentation pipeline
+        self.augmentation = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomResizedCrop(self.size, scale=(0.2, 1.)),
+            transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.RandomApply([self.GaussianBlur([.1, 2.])], p=0.5),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            self.normalize
+        ])
 
-class TwoCropsTransform:
-    """Take two random crops of one image as the query and key."""
+        # Wrapping augmentation into the TwoCropsTransform
+        self.transform = self.TwoCropsTransform(self.augmentation)
 
-    def __init__(self, base_transform):
-        self.base_transform = base_transform
+    class TwoCropsTransform:
+        """Take two random crops of one image as the query and key."""
+        def __init__(self, base_transform):
+            self.base_transform = base_transform
+
+        def __call__(self, x):
+            q = self.base_transform(x)
+            k = self.base_transform(x)
+            return torch.stack([q, k], dim=0)
+
+    class GaussianBlur(object):
+        """Gaussian blur augmentation in SimCLR https://arxiv.org/abs/2002.05709"""
+        def __init__(self, sigma=[.1, 2.]):
+            self.sigma = sigma
+
+        def __call__(self, x):
+            sigma = random.uniform(self.sigma[0], self.sigma[1])
+            x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
+            return x
 
     def __call__(self, x):
-        q = self.base_transform(x)
-        k = self.base_transform(x)
-        return torch.stack([q, k], dim=0)
-
-
-class GaussianBlur(object):
-    """Gaussian blur augmentation in SimCLR https://arxiv.org/abs/2002.05709"""
-
-    def __init__(self, sigma=[.1, 2.]):
-        self.sigma = sigma
-
-    def __call__(self, x):
-        sigma = random.uniform(self.sigma[0], self.sigma[1])
-        x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
-        return x
+        """
+        Apply the transformation to an image and return the augmented version.
+        Returns two augmented versions of the image (query and key).
+        """
+        return self.transform(x)
