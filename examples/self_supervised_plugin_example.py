@@ -1,14 +1,18 @@
-"""
-A simple example on how to use self-supervised models.
-"""
-
 import torch
 from os.path import expanduser
 from torch import nn
+
+from avalanche.benchmarks import SplitCIFAR10
 from avalanche.training.self_supervised.strategy_wrappers.self_naive import SelfNaive
-from avalanche.evaluation.metrics import loss_metrics
-from avalanche.training.plugins import EvaluationPlugin
-from avalanche.benchmarks.classic import SplitMNIST
+
+"""
+Example on how to use a self-supervised model with experience replay.
+"""
+
+from avalanche.evaluation.metrics import (
+    loss_metrics,
+)
+from avalanche.training.plugins import EvaluationPlugin, ReplayPlugin
 from avalanche.logging import InteractiveLogger
 from avalanche.training.self_supervised_losses import SimSiamLoss
 from avalanche.models.self_supervised import SimSiam, SimSiamLoader
@@ -18,12 +22,14 @@ def main():
     print(f"Using device: {device}")
 
     self_supervised_model = SimSiam()
+    loader = SimSiamLoader((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 62)
+
 
     # create the benchmark
-    benchmark = SplitMNIST(
-        n_experiences=5, dataset_root=expanduser("~") + "/.avalanche/data/mnist/",
-        train_transform=SimSiamLoader((0.1307,), (0.3081,), 58),
-        eval_transform=SimSiamLoader((0.1307,), (0.3081,), 58)
+    benchmark = SplitCIFAR10(
+        n_experiences=5, dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
+        train_transform=loader,
+        eval_transform=loader
     )
 
     # choose some metrics and evaluation method
@@ -31,16 +37,6 @@ def main():
     eval_plugin = EvaluationPlugin(
         loss_metrics(minibatch=True, epoch=True, experience=True, stream=True),
         loggers=[interactive_logger],
-    )
-
-    # adapt input layer for MNIST
-    self_supervised_model.backbone.conv1 = nn.Conv2d(
-        in_channels=1,
-        out_channels=64,
-        kernel_size=(7, 7),
-        stride=(2, 2),
-        padding=(3, 3),
-        bias=False
     )
 
     optimizer = torch.optim.SGD(self_supervised_model.parameters(), lr=0.01)
@@ -53,6 +49,7 @@ def main():
         criterion,
         train_epochs=1,
         device=device,
+        plugins=[ReplayPlugin()],
         train_mb_size=128,
         evaluator=eval_plugin,
     )
