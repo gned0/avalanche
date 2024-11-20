@@ -38,7 +38,7 @@ class SimSiam(torch.nn.Module):
             return-(p*z).sum(dim=1).mean()
         """
 
-        self.backbone = models.resnet50(pretrained=True)
+        self.backbone = models.resnet50(weights=None)
         self.backbone.fc = nn.Identity() # remove classification head
 
         self.projector = nn.Sequential(
