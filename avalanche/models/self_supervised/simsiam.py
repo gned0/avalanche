@@ -12,7 +12,6 @@ a self-supervised model and test its integration with Avalanche"""
 
 class SimSiam(torch.nn.Module):
     def __init__(self,
-                 input_size: int = 28 * 28,
                  proj_hidden_dim: int = 2048,
                  proj_output_dim: int = 256,
                  pred_hidden_dim: int = 512,
@@ -93,12 +92,9 @@ class SimSiamLoader:
         self.std = std
         self.size = size
 
-        # Define the normalize transform
         self.normalize = transforms.Normalize(mean=self.mean, std=self.std)
 
-        # Define the augmentation pipeline
         self.augmentation = transforms.Compose([
-            transforms.ToPILImage(),
             transforms.RandomResizedCrop(self.size, scale=(0.2, 1.)),
             transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
             transforms.RandomGrayscale(p=0.2),
@@ -108,7 +104,6 @@ class SimSiamLoader:
             self.normalize
         ])
 
-        # Wrapping augmentation into the TwoCropsTransform
         self.transform = self.TwoCropsTransform(self.augmentation)
 
     class TwoCropsTransform:
