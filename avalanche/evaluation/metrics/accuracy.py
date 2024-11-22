@@ -218,10 +218,7 @@ class AccuracyPluginMetric(GenericPluginMetric[float, Accuracy]):
         return self._metric.result()
 
     def update(self, strategy):
-        if hasattr(strategy, "mb_task_id"):
-            pass
-        else:
-            self._metric.update(strategy.mb_output, strategy.mb_y)
+        self._metric.update(strategy.mb_output, strategy.mb_y)
 
 
 class AccuracyPerTaskPluginMetric(
