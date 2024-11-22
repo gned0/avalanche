@@ -47,10 +47,10 @@ def main():
         self_supervised_model,
         optimizer,
         criterion,
-        train_epochs=1,
+        train_epochs=25,
         device=device,
-        plugins=[ReplayPlugin()],
-        train_mb_size=128,
+        plugins=[ReplayPlugin(mem_size=50)],
+        train_mb_size=256,
         evaluator=eval_plugin,
     )
 
