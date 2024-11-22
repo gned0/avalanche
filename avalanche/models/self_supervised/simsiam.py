@@ -11,9 +11,9 @@ import torchvision.models as models
 a self-supervised model and test its integration with Avalanche"""
 
 class SimSiam(torch.nn.Module):
-    def __init__(self,
+    def  __init__(self,
                  proj_hidden_dim: int = 2048,
-                 proj_output_dim: int = 256,
+                 proj_output_dim: int = 128,
                  pred_hidden_dim: int = 512,
                  ):
         super().__init__()
@@ -37,11 +37,11 @@ class SimSiam(torch.nn.Module):
             return-(p*z).sum(dim=1).mean()
         """
 
-        self.backbone = models.resnet50(weights=None)
+        self.backbone = models.resnet18(weights=None)
         self.backbone.fc = nn.Identity() # remove classification head
 
         self.projector = nn.Sequential(
-            nn.Linear(2048, proj_hidden_dim, bias=False),
+            nn.Linear(512, proj_hidden_dim, bias=False),
             nn.BatchNorm1d(proj_hidden_dim),
             nn.ReLU(),
             nn.Linear(proj_hidden_dim, proj_hidden_dim, bias=False),
