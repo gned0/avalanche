@@ -69,7 +69,7 @@ class SimSiam(torch.nn.Module):
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
 
-        return p1, p2, z1, z2
+        return torch.stack([p1, p2]), torch.stack([z1, z2])
 
     def freeze_backbone(self):
         for param in self.backbone.parameters():

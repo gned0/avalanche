@@ -6,7 +6,9 @@ class SimSiamLoss(nn.Module):
         super().__init__()
         self.criterion = criterion
 
-    def forward(self, p1, p2, z1, z2):
+    def forward(self, p, z):
+        p1, p2 = torch.unbind(p, dim=0)
+        z1, z2 = torch.unbind(z, dim=0)
         # stop gradient on projections to avoid collapse
         z1 = z1.detach()
         z2 = z2.detach()
