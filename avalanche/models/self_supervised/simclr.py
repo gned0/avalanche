@@ -1,3 +1,7 @@
+import random
+
+import torch
+from PIL import ImageFilter
 from torch import nn
 from torchvision import models, transforms
 import torch.nn.functional as F
@@ -13,7 +17,7 @@ class SimCLR(nn.Module):
         self.backbone.fc = nn.Identity()  # remove classification head
 
         self.projector = nn.Sequential(
-            nn.Linear(self.features_dim, proj_hidden_dim),
+            nn.Linear(512, proj_hidden_dim),
             nn.ReLU(),
             nn.Linear(proj_hidden_dim, proj_output_dim),
         )
@@ -24,10 +28,7 @@ class SimCLR(nn.Module):
         z1 = self.projector(self.backbone(x1))
         z2 = self.projector(self.backbone(x2))
 
-        z1_norm = nn.normalize(z1, dim=-1)
-        z2_norm = nn.normalize(z2, dim=-1)
-
-        return z1_norm, z2_norm
+        return F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
 
 class SimCLRLoader:
     def __init__(self, mean, std, size):
