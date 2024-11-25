@@ -7,13 +7,16 @@ class SimSiamLoss(nn.Module):
         super().__init__()
         self.criterion = criterion
 
+    def loss(self, p, z):
+        p = F.normalize(p, dim=1)
+        z = F.normalize(z, dim=1)
+        return -(p * z).sum(dim=1).mean()
+
     def forward(self, p, z):
         p1, p2 = torch.unbind(p, dim=0)
         z1, z2 = torch.unbind(z, dim=0)
         # stop gradient on projections to avoid collapse
-        z1 = z1.detach()
-        z2 = z2.detach()
-        return -(self.criterion(p1, z2).mean() + self.criterion(p2, z1).mean()) * 0.5
+        return self.loss(p1, z2.detach()) / 2 + self.loss(p2, z1.detach()) / 2
 
 
 class BarlowTwinsLoss(nn.Module):
@@ -39,27 +42,27 @@ class BarlowTwinsLoss(nn.Module):
 
 
 class NTXentLoss(nn.Module):
-    def __init__(self, temperature=0.1):
+    def __init__(self, temperature=0.5):
         super().__init__()
         self.temperature = temperature
 
     def forward(self, z1, z2):
-        batch_size = z1.size(0)
+        N, Z = z1.shape
+        device = z1.device
+        representations = torch.cat([z1, z2], dim=0)
+        similarity_matrix = F.cosine_similarity(representations.unsqueeze(1), representations.unsqueeze(0), dim=-1)
+        l_pos = torch.diag(similarity_matrix, N)
+        r_pos = torch.diag(similarity_matrix, -N)
+        positives = torch.cat([l_pos, r_pos]).view(2 * N, 1)
+        diag = torch.eye(2 * N, dtype=torch.bool, device=device)
+        diag[N:, :N] = diag[:N, N:] = diag[:N, :N]
 
-        # Concatenate embeddings
-        z = torch.cat([z1, z2], dim=0)
+        negatives = similarity_matrix[~diag].view(2 * N, -1)
 
-        # Compute similarity matrix
-        sim_matrix = torch.mm(z, z.t())  # Shape: (2*batch_size, 2*batch_size)
-        sim_matrix = sim_matrix / self.temperature
+        logits = torch.cat([positives, negatives], dim=1)
+        logits /= self.temperature
 
-        # Labels
-        labels = torch.cat([torch.arange(batch_size) for _ in range(2)], dim=0).to(z.device)
+        labels = torch.zeros(2 * N, device=device, dtype=torch.int64)
 
-        # Mask to exclude self-similarities
-        mask = torch.eye(labels.size(0), dtype=torch.bool).to(z.device)
-        sim_matrix = sim_matrix[~mask].view(labels.size(0), -1)
-
-        # NT-Xent Loss
-        loss = F.cross_entropy(sim_matrix, labels)
-        return loss
+        loss = F.cross_entropy(logits, labels, reduction='sum')
+        return loss / (2 * N)
