@@ -3,20 +3,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SimSiamLoss(nn.Module):
-    def __init__(self, criterion=nn.CosineSimilarity(dim=1)):
+    def __init__(self, version='simplified'):
         super().__init__()
-        self.criterion = criterion
+        self.ver = version
 
-    def loss(self, p, z):
-        p = F.normalize(p, dim=1)
-        z = F.normalize(z, dim=1)
-        return -(p * z).sum(dim=1).mean()
+    def criterion(self, p, z):
+        if self.ver == 'original':
+            z = z.detach()  # stop gradient
+
+            p = nn.functional.normalize(p, dim=1)
+            z = nn.functional.normalize(z, dim=1)
+
+            return -(p * z).sum(dim=1).mean()
+
+        elif self.ver == 'simplified':
+            z = z.detach()  # stop gradient
+            return - nn.functional.cosine_similarity(p, z, dim=-1).mean()
 
     def forward(self, p, z):
+
         p1, p2 = torch.unbind(p, dim=0)
         z1, z2 = torch.unbind(z, dim=0)
-        # stop gradient on projections to avoid collapse
-        return self.loss(p1, z2.detach()) / 2 + self.loss(p2, z1.detach()) / 2
+
+        loss1 = self.criterion(p1, z2)
+        loss2 = self.criterion(p2, z1)
+
+        return 0.5 * loss1 + 0.5 * loss2
 
 
 class BarlowTwinsLoss(nn.Module):
@@ -25,20 +37,22 @@ class BarlowTwinsLoss(nn.Module):
         self.lambd = lambd
 
     def forward(self, z1, z2):
-        batch_size = z1.size(0)
+        # normalize repr. along the batch dimension
+        z_a_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
+        z_b_norm = (z2 - z2.mean(0)) / z2.std(0) # NxD
+
+        N = z1.size(0)
+        D = z1.size(1)
 
         # cross-correlation matrix
-        c = z1.T @ z2 / batch_size
+        c = torch.mm(z_a_norm.T, z_b_norm) / N # DxD
+        # loss
+        c_diff = (c - torch.eye(D, device=torch.device)).pow(2) # DxD
+        # multiply off-diagonal elems of c_diff by lambda
+        c_diff[~torch.eye(D, dtype=bool)] *= self.lambda_param
+        loss = c_diff.sum()
 
-        on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
-        off_diag = self.off_diagonal(c).pow_(2).sum()
-
-        return on_diag + self.lambd * off_diag
-
-    def off_diagonal(self, x):
-        n, m = x.shape
-        assert n == m
-        return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+        return loss
 
 
 class NTXentLoss(nn.Module):
