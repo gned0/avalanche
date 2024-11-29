@@ -1,18 +1,10 @@
 import torch.nn
 from torch import nn
-from torchvision.transforms import transforms
-from PIL import ImageFilter
-import random
-
-from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
-
-"""Things that can be generalized such as image transformation and backbones are here
-'soldered' to the model. This is not a good practice, but it is a simple way to prototype
-a self-supervised model and test its integration with Avalanche"""
 
 class SimSiam(torch.nn.Module):
     def  __init__(self,
-                 backbone_out_dim: int = 128,
+                 backbone: nn.Module,
+                 projector_in_dim: int = 128,
                  proj_hidden_dim: int = 2048,
                  proj_output_dim: int = 2048,
                  pred_hidden_dim: int = 512,
@@ -20,8 +12,6 @@ class SimSiam(torch.nn.Module):
         super().__init__()
 
         """
-        Provisional implementation of simsiam, architecture does not follow the original paper yet.
-        Pseudo-code of actual version to implement:
          # f: backbone + projection mlp
          # h: prediction mlp
          for x in loader: # load a minibatch x with n samples
@@ -37,10 +27,10 @@ class SimSiam(torch.nn.Module):
             z = normalize(z, dim=1) # l2-normalize
             return-(p*z).sum(dim=1).mean()
         """
-        self.backbone = ModelBase(feature_dim=backbone_out_dim, arch='resnet18', bn_splits=8)
+        self.backbone = backbone
 
         self.projector = nn.Sequential(
-            nn.Linear(backbone_out_dim, proj_hidden_dim, bias=False),
+            nn.Linear(projector_in_dim, proj_hidden_dim, bias=False),
             nn.BatchNorm1d(proj_hidden_dim),
             nn.ReLU(),
             nn.Linear(proj_hidden_dim, proj_hidden_dim, bias=False),
@@ -69,57 +59,3 @@ class SimSiam(torch.nn.Module):
         p2 = self.predictor(z2)
 
         return torch.stack([p1, p2], dim=0), torch.stack([z1, z2], dim=0)
-
-class SimSiamLoader:
-    def __init__(self, mean, std, size):
-        """
-        Initialize the SimSiam loader with configurable normalization parameters and image size.
-
-        :param mean: Mean value for normalization
-        :param std: Standard deviation value for normalization
-        :param size: Target size for image resizing
-        """
-        self.mean = mean
-        self.std = std
-        self.size = size
-
-        self.normalize = transforms.Normalize(mean=self.mean, std=self.std)
-
-        self.augmentation = transforms.Compose([
-            transforms.RandomResizedCrop(self.size, scale=(0.2, 1.)),
-            transforms.RandomApply([transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([self.GaussianBlur([.1, 2.])], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            self.normalize
-        ])
-
-        self.transform = self.TwoCropsTransform(self.augmentation)
-
-    class TwoCropsTransform:
-        """Take two random crops of one image as the query and key."""
-        def __init__(self, base_transform):
-            self.base_transform = base_transform
-
-        def __call__(self, x):
-            q = self.base_transform(x)
-            k = self.base_transform(x)
-            return torch.stack([q, k], dim=0)
-
-    class GaussianBlur(object):
-        """Gaussian blur augmentation in SimCLR https://arxiv.org/abs/2002.05709"""
-        def __init__(self, sigma=[.1, 2.]):
-            self.sigma = sigma
-
-        def __call__(self, x):
-            sigma = random.uniform(self.sigma[0], self.sigma[1])
-            x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
-            return x
-
-    def __call__(self, x):
-        """
-        Apply the transformation to an image and return the augmented version.
-        Returns two augmented versions of the image (query and key).
-        """
-        return self.transform(x)
