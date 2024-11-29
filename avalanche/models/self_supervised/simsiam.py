@@ -3,8 +3,8 @@ from torch import nn
 from torchvision.transforms import transforms
 from PIL import ImageFilter
 import random
-from avalanche import models
-import torchvision.models as models
+
+from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
 
 """Things that can be generalized such as image transformation and backbones are here
 'soldered' to the model. This is not a good practice, but it is a simple way to prototype
@@ -12,8 +12,9 @@ a self-supervised model and test its integration with Avalanche"""
 
 class SimSiam(torch.nn.Module):
     def  __init__(self,
+                 backbone_out_dim: int = 128,
                  proj_hidden_dim: int = 2048,
-                 proj_output_dim: int = 128,
+                 proj_output_dim: int = 2048,
                  pred_hidden_dim: int = 512,
                  ):
         super().__init__()
@@ -36,12 +37,10 @@ class SimSiam(torch.nn.Module):
             z = normalize(z, dim=1) # l2-normalize
             return-(p*z).sum(dim=1).mean()
         """
-
-        self.backbone = models.resnet18(weights=None)
-        self.backbone.fc = nn.Identity() # remove classification head
+        self.backbone = ModelBase(feature_dim=backbone_out_dim, arch='resnet18', bn_splits=8)
 
         self.projector = nn.Sequential(
-            nn.Linear(512, proj_hidden_dim, bias=False),
+            nn.Linear(backbone_out_dim, proj_hidden_dim, bias=False),
             nn.BatchNorm1d(proj_hidden_dim),
             nn.ReLU(),
             nn.Linear(proj_hidden_dim, proj_hidden_dim, bias=False),
@@ -61,7 +60,7 @@ class SimSiam(torch.nn.Module):
 
     def forward(self, x):
 
-        x1, x2 = x[:, 0], x[:, 1]
+        x1, x2 = torch.unbind(x, dim=1)
 
         z1 = self.projector(self.backbone(x1))
         z2 = self.projector(self.backbone(x2))
@@ -69,15 +68,7 @@ class SimSiam(torch.nn.Module):
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
 
-        return torch.stack([p1, p2]), torch.stack([z1, z2])
-
-    def freeze_backbone(self):
-        for param in self.backbone.parameters():
-            param.requires_grad = False
-
-    def unfreeze_backbone(self):
-        for param in self.backbone.parameters():
-            param.requires_grad = True
+        return torch.stack([p1, p2], dim=0), torch.stack([z1, z2], dim=0)
 
 class SimSiamLoader:
     def __init__(self, mean, std, size):
