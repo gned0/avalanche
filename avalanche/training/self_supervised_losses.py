@@ -37,15 +37,14 @@ class BarlowTwinsLoss(nn.Module):
         self.lambd = lambd
 
     def forward(self, z1, z2):
-        # normalize repr. along the batch dimension
-        z_a_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
-        z_b_norm = (z2 - z2.mean(0)) / z2.std(0) # NxD
+        z1_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
+        z2_norm = (z2 - z2.mean(0)) / z2.std(0) # NxD
 
         N = z1.size(0)
         D = z1.size(1)
 
         # cross-correlation matrix
-        c = torch.mm(z_a_norm.T, z_b_norm) / N # DxD
+        c = torch.mm(z1_norm.T, z2_norm) / N # DxD
         # loss
         c_diff = (c - torch.eye(D, device=torch.device)).pow(2) # DxD
         # multiply off-diagonal elems of c_diff by lambda
@@ -60,23 +59,21 @@ class NTXentLoss(nn.Module):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, z1, z2):
-        N, Z = z1.shape
-        device = z1.device
-        representations = torch.cat([z1, z2], dim=0)
-        similarity_matrix = F.cosine_similarity(representations.unsqueeze(1), representations.unsqueeze(0), dim=-1)
-        l_pos = torch.diag(similarity_matrix, N)
-        r_pos = torch.diag(similarity_matrix, -N)
-        positives = torch.cat([l_pos, r_pos]).view(2 * N, 1)
-        diag = torch.eye(2 * N, dtype=torch.bool, device=device)
-        diag[N:, :N] = diag[:N, N:] = diag[:N, :N]
+    def forward(self, z):
+        indexes = torch.arange(z.size(0)).cuda()
+        half = indexes[:z.size(0) // 2]
+        indexes = half.repeat(2)
 
-        negatives = similarity_matrix[~diag].view(2 * N, -1)
+        z = F.normalize(z, dim=-1)
 
-        logits = torch.cat([positives, negatives], dim=1)
-        logits /= self.temperature
+        sim = torch.exp(torch.einsum("if, jf -> ij", z, z) / self.temperature)
 
-        labels = torch.zeros(2 * N, device=device, dtype=torch.int64)
+        pos_mask = indexes.view(-1, 1) == indexes.view(1, -1)
+        neg_mask = ~pos_mask
 
-        loss = F.cross_entropy(logits, labels, reduction='sum')
-        return loss / (2 * N)
+        pos = torch.sum(sim * pos_mask, dim=1)
+        neg = torch.sum(sim * neg_mask, dim=1)
+
+        loss = -torch.mean(torch.log(pos / (pos + neg)))
+
+        return loss

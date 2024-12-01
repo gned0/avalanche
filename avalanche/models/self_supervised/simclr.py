@@ -20,9 +20,5 @@ class SimCLR(nn.Module):
         )
 
     def forward(self, x):
-        x1, x2 = torch.unbind(x, dim=1)
-        z1 = self.projector(self.backbone(x1))
-        z2 = self.projector(self.backbone(x2))
-
-        return F.normalize(z1, dim=-1), F.normalize(z2, dim=-1)
+        return self.projector(self.backbone(x))
 
