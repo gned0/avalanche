@@ -26,18 +26,17 @@ class LUMPPlugin(SelfSupervisedPlugin):
             # the dataloader.
             return
         else:
-            buf_inputs_1, buf_inputs_2 = self.buffer.get_data(strategy.mbatch[0][0], self.transform) # get stored inputs by random sampling from buffer
-            inputs_1 = strategy.mbatch[0]
-            inputs_2 = strategy.mbatch[1]
+            buf_inputs1, buf_inputs2 = self.buffer.get_data(strategy.mb_x.shape[0]) # get stored inputs by random sampling from buffer
+            inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
             lam = torch.distributions.Beta(self.alpha, self.alpha).sample().item()
 
             # Perform mixup
-            mixed_inputs_1 = lam * inputs_1 + (1 - lam) * buf_inputs_1
-            mixed_inputs_2 = lam * inputs_2 + (1 - lam) * buf_inputs_2
-            strategy.mbatch = (mixed_inputs_1, mixed_inputs_2, *strategy.mbatch[2:])
+            mixed_inputs_1 = lam * inputs1 + (1 - lam) * buf_inputs1
+            mixed_inputs_2 = lam * inputs2 + (1 - lam) * buf_inputs2
+            mixed_inputs = torch.stack([mixed_inputs_1, mixed_inputs_2], dim=1)
+            strategy.mbatch = (mixed_inputs, *strategy.mbatch[1:])
 
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
-        print(strategy.mbatch[0].shape)
         inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
         self.buffer.add_data(examples=inputs1, labels=inputs2)
 
@@ -68,7 +67,7 @@ class Buffer:
         self.device = device
         self.num_seen_examples = 0
         self.functional_index = eval(mode)
-        self.attributes = ['inputs', 'labels']
+        self.attributes = ['examples', 'labels']
 
     def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor) -> None:
         """
