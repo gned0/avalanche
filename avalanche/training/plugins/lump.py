@@ -37,7 +37,9 @@ class LUMPPlugin(SelfSupervisedPlugin):
             strategy.mbatch = (mixed_inputs_1, mixed_inputs_2, *strategy.mbatch[2:])
 
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
-        self.buffer.add_data(strategy, **kwargs) # ???
+        print(strategy.mbatch[0].shape)
+        inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
+        self.buffer.add_data(examples=inputs1, labels=inputs2)
 
 def reservoir(num_seen_examples: int, buffer_size: int) -> int:
     """
@@ -56,28 +58,19 @@ def reservoir(num_seen_examples: int, buffer_size: int) -> int:
         return -1
 
 
-def ring(num_seen_examples: int, buffer_portion_size: int, task: int) -> int:
-    return num_seen_examples % buffer_portion_size + task * buffer_portion_size
-
-
 class Buffer:
     """
     The memory buffer of rehearsal method.
     """
-    def __init__(self, buffer_size, device, n_tasks=None, mode='reservoir'):
+    def __init__(self, buffer_size, device, mode='reservoir'):
         assert mode in ['ring', 'reservoir']
         self.buffer_size = buffer_size
         self.device = device
         self.num_seen_examples = 0
         self.functional_index = eval(mode)
-        if mode == 'ring':
-            assert n_tasks is not None
-            self.task_number = n_tasks
-            self.buffer_portion_size = buffer_size // n_tasks
-        self.attributes = ['examples', 'labels', 'logits', 'task_labels']
+        self.attributes = ['inputs', 'labels']
 
-    def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor,
-                     logits: torch.Tensor, task_labels: torch.Tensor) -> None:
+    def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor) -> None:
         """
         Initializes just the required tensors.
         :param examples: tensor containing the images
@@ -92,7 +85,7 @@ class Buffer:
                 setattr(self, attr_str, torch.zeros((self.buffer_size,
                         *attr.shape[1:]), dtype=typ, device=self.device))
 
-    def add_data(self, examples, labels=None, logits=None, task_labels=None):
+    def add_data(self, examples, labels):
         """
         Adds the data to the memory buffer according to the reservoir strategy.
         :param examples: tensor containing the images
@@ -102,19 +95,15 @@ class Buffer:
         :return:
         """
         if not hasattr(self, 'examples'):
-            self.init_tensors(examples, labels, logits, task_labels)
+            self.init_tensors(examples, labels)
 
         for i in range(examples.shape[0]):
             index = reservoir(self.num_seen_examples, self.buffer_size)
             self.num_seen_examples += 1
             if index >= 0:
                 self.examples[index] = examples[i].to(self.device)
-                if labels is not None:
-                    self.labels[index] = labels[i].to(self.device)
-                if logits is not None:
-                    self.logits[index] = logits[i].to(self.device)
-                if task_labels is not None:
-                    self.task_labels[index] = task_labels[i].to(self.device)
+                self.labels[index] = labels[i].to(self.device)
+
 
     def get_data(self, size: int, transform: transforms=None) -> Tuple:
         """
