@@ -32,9 +32,10 @@ class SimSiamLoss(nn.Module):
 
 
 class BarlowTwinsLoss(nn.Module):
-    def __init__(self, lambd=5e-3):
+    def __init__(self, lambd=5e-3, device='cuda'):
         super().__init__()
         self.lambd = lambd
+        self.device = device
 
     def forward(self, z1, z2):
         z1_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
@@ -45,10 +46,9 @@ class BarlowTwinsLoss(nn.Module):
 
         # cross-correlation matrix
         c = torch.mm(z1_norm.T, z2_norm) / N # DxD
-        # loss
-        c_diff = (c - torch.eye(D, device=torch.device)).pow(2) # DxD
+        c_diff = (c - torch.eye(D, device=self.device)).pow(2) # DxD
         # multiply off-diagonal elems of c_diff by lambda
-        c_diff[~torch.eye(D, dtype=bool)] *= self.lambda_param
+        c_diff[~torch.eye(D, dtype=bool)] *= self.lambd
         loss = c_diff.sum()
 
         return loss
