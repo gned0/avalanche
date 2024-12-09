@@ -20,5 +20,12 @@ class SimCLR(nn.Module):
         )
 
     def forward(self, x):
-        return self.projector(self.backbone(x))
+        x = x.view(-1, *x.shape[2:])
+        f = self.backbone(x)
+        z = self.projector(f)
+
+        return {
+            'z': z,
+            'f': f,
+        }
 

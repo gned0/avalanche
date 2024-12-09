@@ -29,8 +29,15 @@ class BarlowTwins(nn.Module):
 
     def forward(self, x):
         x1, x2 = torch.unbind(x, dim=1)
-        z1 = self.projector(self.backbone(x1))
-        z2 = self.projector(self.backbone(x2))
+        f1 = self.backbone(x1)
+        f2 = self.backbone(x2)
+        z1 = self.projector(f1)
+        z2 = self.projector(f2)
 
-        return z1, z2
+        return {
+            'z1': z1,
+            'z2': z2,
+            'feats1': f1,
+            'feats2': f2
+        }
 

@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from sympy.physics.vector import outer
+
 
 class SimSiamLoss(nn.Module):
     def __init__(self, version='simplified'):
@@ -20,10 +22,10 @@ class SimSiamLoss(nn.Module):
             z = z.detach()  # stop gradient
             return - nn.functional.cosine_similarity(p, z, dim=-1).mean()
 
-    def forward(self, p, z):
+    def forward(self, out):
 
-        p1, p2 = torch.unbind(p, dim=0)
-        z1, z2 = torch.unbind(z, dim=0)
+        p1, p2 = torch.unbind(out['p'], dim=0)
+        z1, z2 = torch.unbind(out['z'], dim=0)
 
         loss1 = self.criterion(p1, z2)
         loss2 = self.criterion(p2, z1)
@@ -37,7 +39,9 @@ class BarlowTwinsLoss(nn.Module):
         self.lambd = lambd
         self.device = device
 
-    def forward(self, z1, z2):
+    def forward(self, out):
+        z1 = out['z1']
+        z2 = out['z2']
         z1_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
         z2_norm = (z2 - z2.mean(0)) / z2.std(0) # NxD
 
@@ -59,7 +63,8 @@ class NTXentLoss(nn.Module):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, z):
+    def forward(self, out):
+        z = out['z']
         indexes = torch.arange(z.size(0)).cuda()
         half = indexes[:z.size(0) // 2]
         indexes = half.repeat(2)

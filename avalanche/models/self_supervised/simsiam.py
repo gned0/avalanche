@@ -33,13 +33,16 @@ class SimSiam(torch.nn.Module):
         )
 
     def forward(self, x):
-
         x1, x2 = torch.unbind(x, dim=1)
-
-        z1 = self.projector(self.backbone(x1))
-        z2 = self.projector(self.backbone(x2))
-
+        f1 = self.backbone(x1)
+        f2 = self.backbone(x2)
+        z1 = self.projector(f1)
+        z2 = self.projector(f2)
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
 
-        return torch.stack([p1, p2], dim=0), torch.stack([z1, z2], dim=0)
+        return {
+            'p': torch.stack([p1, p2], dim=0),
+            'z': torch.stack([z1, z2], dim=0),
+            'f': torch.stack([f1, f2], dim=0),
+        }
