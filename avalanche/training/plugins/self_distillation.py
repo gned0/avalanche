@@ -34,10 +34,15 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
             nn.Linear(hidden_dim, output_dim),
         )
 
+        self.predictor_initialized = False
+
     def before_training(self, strategy, **kwargs):
-        # Add predictor's parameters to the optimizer
-        extra_params = [{"params": self.distill_predictor.parameters()}]
-        strategy.optimizer.add_param_group(extra_params)
+        if not self.predictor_initialized:
+            self.distill_predictor = self.distill_predictor.to(strategy.device)
+            # Add predictor's parameters to the optimizer
+            extra_params = {"params": self.distill_predictor.parameters()}
+            strategy.optimizer.add_param_group(extra_params)
+            self.predictor_initialized = True
 
     def before_backward(self, strategy, **kwargs):
         raise NotImplementedError("Subclasses must implement the before_backward method.")
