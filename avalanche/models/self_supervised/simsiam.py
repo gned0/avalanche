@@ -42,7 +42,7 @@ class SimSiam(torch.nn.Module):
         p2 = self.predictor(z2)
 
         return {
-            'p': torch.stack([p1, p2], dim=0),
-            'z': torch.stack([z1, z2], dim=0),
-            'f': torch.stack([f1, f2], dim=0),
+            'f': [f1, f2],
+            'z': [z1, z2],
+            'p': [p1, p2]
         }

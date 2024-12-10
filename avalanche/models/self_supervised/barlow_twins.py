@@ -35,9 +35,7 @@ class BarlowTwins(nn.Module):
         z2 = self.projector(f2)
 
         return {
-            'z1': z1,
-            'z2': z2,
-            'feats1': f1,
-            'feats2': f2
+            'z': [z1, z2],
+            'f': [f1, f2]
         }
 
