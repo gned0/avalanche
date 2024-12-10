@@ -30,7 +30,7 @@ class SelfSupervisedProblem(
 
     def criterion(self):
         """Loss function for self-supervised problems."""
-        return self._criterion(self.mb_output[0], self.mb_output[1])
+        return self._criterion(self.mb_output)
 
     def forward(self):
         """Compute the model's output given the current mini-batch."""
