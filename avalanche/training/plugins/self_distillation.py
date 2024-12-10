@@ -1,8 +1,9 @@
-import copy
+from copy import deepcopy
 from typing import Optional
 
 import torch
 from torch import nn
+
 from avalanche.core import SelfSupervisedPlugin, Template
 
 
@@ -22,7 +23,8 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
         :param hidden_dim: Hidden layer size for the distillation predictor.
         """
         super().__init__()
-        self.distiller: Optional[nn.Module] = None  # Frozen model
+        self.frozen_backbone: Optional[nn.Module] = None
+        self.frozen_projector: Optional[nn.Module] = None
         self.distillation_loss = distillation_loss
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
@@ -48,10 +50,23 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
         raise NotImplementedError("Subclasses must implement the before_backward method.")
 
     def after_training_exp(self, strategy: Template, **kwargs):
-        self.distiller = copy.deepcopy(strategy.model)
+        self.frozen_backbone = deepcopy(strategy.model.backbone)
+        self.frozen_projector = deepcopy(strategy.model.projector)
+
+        for pg in self.frozen_backbone.parameters():
+            pg.requires_grad = False
+        for pg in self.frozen_projector.parameters():
+            pg.requires_grad = False
 
     @torch.no_grad()
-    def frozen_forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.distiller is None:
-            raise RuntimeError("Distiller is not initialized.")
-        return self.distiller(x)
+    def frozen_forward(self, x: torch.Tensor):
+        x1, x2 = torch.unbind(x, dim=1)
+        f1_frozen = self.frozen_backbone(x1)
+        f2_frozen = self.frozen_backbone(x2)
+        z1_frozen = self.frozen_projector(f1_frozen)
+        z2_frozen = self.frozen_projector(f2_frozen)
+
+        return {
+            'f_frozen': [f1_frozen, f2_frozen],
+            'z_frozen': [z1_frozen, z2_frozen]
+        }

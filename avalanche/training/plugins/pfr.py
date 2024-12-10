@@ -14,14 +14,19 @@ class PFRPlugin(SelfDistillationPlugin):
         self.distill_barlow_lamb = distill_barlow_lamb
 
     def before_backward(self, strategy, **kwargs):
-        if self.distiller is None:
+        if self.frozen_backbone is None:
             return
-        z1, z2 = strategy.mb_output[1].unbind(dim=1)
-        z1_frozen, z2_frozen = self.frozen_forward(strategy.mb_x)[1].unbind(dim=1)
+        # retrieve the representation from the current model
+        f1, f2 = strategy.mb_output['f']
 
-        # Compute additional loss
-        p1 = self.distill_predictor(z1)
-        p2 = self.distill_predictor(z2)
-        additional_term = -(self.distillation_loss(p1, z1_frozen.detach()).mean()
-                            + self.distillation_loss(p2, z2_frozen.detach()).mean()) * 0.5
+        # frozen pass: retrieve the representation from the frozen model
+        frozen_output = self.frozen_forward(strategy.mb_x)
+        f1_frozen, f2_frozen = frozen_output['f_frozen']
+
+        p1 = self.distill_predictor(f1)
+        p2 = self.distill_predictor(f2)
+
+        additional_term = -(self.distillation_loss(p1, f1_frozen.detach()).mean()
+                            + self.distillation_loss(p2, f2_frozen.detach()).mean()) * 0.5
+        print(f"Additional term: {additional_term}")
         strategy.loss += additional_term
