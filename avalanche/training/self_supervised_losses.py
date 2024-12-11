@@ -63,21 +63,30 @@ class NTXentLoss(nn.Module):
         self.temperature = temperature
 
     def forward(self, out):
-        z = out['z']
-        indexes = torch.arange(z.size(0)).cuda()
-        half = indexes[:z.size(0) // 2]
-        indexes = half.repeat(2)
+        z1, z2 = out['z']
+        device = z1.device
 
+        b = z1.size(0)
+        z = torch.cat((z1, z2), dim=0)
         z = F.normalize(z, dim=-1)
 
-        sim = torch.exp(torch.einsum("if, jf -> ij", z, z) / self.temperature)
+        logits = torch.einsum("if, jf -> ij", z, z) / self.temperature
+        logits_max, _ = torch.max(logits, dim=1, keepdim=True)
+        logits = logits - logits_max.detach()
 
-        pos_mask = indexes.view(-1, 1) == indexes.view(1, -1)
-        neg_mask = ~pos_mask
+        # positive mask are matches i, j (i from aug1, j from aug2), where i == j and matches j, i
+        pos_mask = torch.zeros((2 * b, 2 * b), dtype=torch.bool, device=device)
+        pos_mask[:, b:].fill_diagonal_(True)
+        pos_mask[b:, :].fill_diagonal_(True)
 
-        pos = torch.sum(sim * pos_mask, dim=1)
-        neg = torch.sum(sim * neg_mask, dim=1)
+        # all matches excluding the main diagonal
+        logit_mask = torch.ones_like(pos_mask, device=device).fill_diagonal_(0)
 
-        loss = -torch.mean(torch.log(pos / (pos + neg)))
+        exp_logits = torch.exp(logits) * logit_mask
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
 
+        # compute mean of log-likelihood over positives
+        mean_log_prob_pos = (pos_mask * log_prob).sum(1) / pos_mask.sum(1)
+        # loss
+        loss = -mean_log_prob_pos.mean()
         return loss

@@ -20,12 +20,14 @@ class SimCLR(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(-1, *x.shape[2:])
-        f = self.backbone(x)
-        z = self.projector(f)
+        x1, x2 = torch.unbind(x, dim=1)
+        f1 = self.backbone(x1)
+        f2 = self.backbone(x2)
+        z1 = self.projector(f1)
+        z2 = self.projector(f2)
 
         return {
-            'z': z,
-            'f': f,
+            'z': [z1, z2],
+            'f': [f1, f2]
         }
 
