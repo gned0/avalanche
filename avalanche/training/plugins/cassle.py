@@ -13,14 +13,16 @@ class CaSSLePlugin(SelfDistillationPlugin):
                          hidden_dim=hidden_dim)
 
     def before_backward(self, strategy, **kwargs):
-        if self.distiller is None:
+        if self.frozen_backbone is None:
             return
-        z1, z2 = strategy.mb_output[1].unbind(dim=1)
-        z1_frozen, z2_frozen = self.frozen_forward(strategy.mb_x)[1].unbind(dim=1)
 
-        # Compute additional loss
+        frozen_output = self.frozen_forward(strategy.mb_x)
+        z1_frozen, z2_frozen = frozen_output['z_frozen']
+
+        z1, z2 = strategy.mb_output['z']
         p1 = self.distill_predictor(z1)
         p2 = self.distill_predictor(z2)
+
         additional_term = (self.distillation_loss(p1, z1_frozen)
                            + self.distillation_loss(p2, z2_frozen)) / 2
         strategy.loss += additional_term
