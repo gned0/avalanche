@@ -70,7 +70,7 @@ def main(args):
         device=device,
         plugins=[
             LRSchedulerPlugin(
-                torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200),
+                torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs),
                 step_granularity="epoch",
             ),
         ],
