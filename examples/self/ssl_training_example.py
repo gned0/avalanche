@@ -15,12 +15,13 @@ from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
 from avalanche.training.plugins import LRSchedulerPlugin
 from avalanche.training.self_supervised_losses import SimSiamLoss, BarlowTwinsLoss, NTXentLoss
 from avalanche.evaluation.metrics import loss_metrics
-from avalanche.logging import InteractiveLogger
+from avalanche.logging import InteractiveLogger, TextLogger
 from avalanche.training.plugins import EvaluationPlugin
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+
     # Select SSL method
     if args.ssl_method == "simsiam":
         model = SimSiam(backbone=ModelBase(feature_dim=128, arch="resnet18", bn_splits=8))
@@ -48,9 +49,15 @@ def main(args):
 
     # Metrics and logging
     interactive_logger = InteractiveLogger()
+    loggers = [interactive_logger]
+
+    if args.log_file:
+        text_logger = TextLogger(open(args.log_file, 'a'))
+        loggers.append(text_logger)
+
     eval_plugin = EvaluationPlugin(
         loss_metrics(minibatch=False, epoch=True, experience=True),
-        loggers=[interactive_logger],
+        loggers=loggers,
     )
 
     # Optimizer and strategy
@@ -85,9 +92,11 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ssl_method", type=str, required=True,
+    parser.add_argument("--ssl_method", type=str, default="simsiam",
                         help="Self-supervised learning method: simsiam, barlow, or simclr.")
     parser.add_argument("--save_path", type=str, required=True, help="Path to save the trained model weights.")
     parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs.")
+    parser.add_argument("--log_file", type=str, default=None,
+                        help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
     args = parser.parse_args()
     main(args)
