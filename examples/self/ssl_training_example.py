@@ -1,9 +1,12 @@
 import argparse
+import math
 import torch
 from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 import os
+
+from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.benchmarks import SplitCIFAR10
 from avalanche.benchmarks.utils.self_supervised.barlow_transform import BarlowTwinsTransform
@@ -15,7 +18,7 @@ from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
 from avalanche.training.plugins import LRSchedulerPlugin
 from avalanche.training.self_supervised_losses import SimSiamLoss, BarlowTwinsLoss, NTXentLoss
 from avalanche.evaluation.metrics import loss_metrics
-from avalanche.logging import InteractiveLogger, TextLogger
+from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
 
 def main(args):
@@ -55,34 +58,57 @@ def main(args):
         text_logger = TextLogger(open(args.log_file, 'a'))
         loggers.append(text_logger)
 
+    if args.tb_path:
+        loggers.append(TensorboardLogger(args.tb_path))
+
     eval_plugin = EvaluationPlugin(
-        loss_metrics(minibatch=False, epoch=True, experience=True),
+        loss_metrics(minibatch=True, epoch=True, experience=True),
+        learning_rate_metrics(minibatch=True),
         loggers=loggers,
     )
 
     # Optimizer and strategy
     optimizer = torch.optim.SGD(model.parameters(), lr=0.06, weight_decay=5e-4, momentum=0.9)
-    strategy = SelfNaive(
-        model,
+    train_mb_size = 512
+    n_batches_per_epoch = len(benchmark.train_stream[0].dataset) // train_mb_size
+    n_restarts = 5
+
+    overall_steps = args.epochs * n_batches_per_epoch
+    cycle_steps = math.ceil(overall_steps * (1.0 / float(n_restarts)))
+
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+    #     optimizer,
+    #     T_0=cycle_steps,
+    #     eta_min=1e-6,
+    # )
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        loss_fn,
+        T_max=overall_steps,
+        eta_min=1e-6,
+    )
+
+    strategy = SelfNaive(
+        model=model,
+        optimizer=optimizer,
+        criterion=loss_fn,
         train_epochs=args.epochs,
         device=device,
         plugins=[
             LRSchedulerPlugin(
-                torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs),
-                step_granularity="epoch",
+                scheduler=scheduler,
+                step_granularity="iteration",
             ),
         ],
-        train_mb_size=512,
+        train_mb_size=train_mb_size,
         evaluator=eval_plugin,
     )
 
     # Train
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=1)
-        strategy.eval(benchmark.test_stream[:])
+        strategy.train(experience, num_workers=16, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=16)
 
     # Save weights
     save_path = args.save_path
@@ -95,8 +121,10 @@ if __name__ == "__main__":
     parser.add_argument("--ssl_method", type=str, default="simsiam",
                         help="Self-supervised learning method: simsiam, barlow, or simclr.")
     parser.add_argument("--save_path", type=str, required=True, help="Path to save the trained model weights.")
-    parser.add_argument("--epochs", type=int, default=200, help="Number of training epochs.")
+    parser.add_argument("--epochs", type=int, default=800, help="Number of training epochs.")
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
+    parser.add_argument("--tb_path", type=str, default=None,
+                        help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     args = parser.parse_args()
     main(args)
