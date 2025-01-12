@@ -3,8 +3,10 @@ import torch
 from torchvision import transforms
 from PIL import ImageFilter, ImageOps
 
+
 class ContrastiveTransform:
     """Base class for SSL data augmentation pipelines."""
+
     def __init__(self, mean, std, size):
         """
         Initialize common properties for data augmentation pipelines.
@@ -20,7 +22,8 @@ class ContrastiveTransform:
 
     class GaussianBlur:
         """Gaussian blur augmentation."""
-        def __init__(self, sigma=[.1, 2.]):
+
+        def __init__(self, sigma=[0.1, 2.0]):
             self.sigma = sigma
 
         def __call__(self, img):
@@ -29,6 +32,7 @@ class ContrastiveTransform:
 
     class Solarization:
         """Solarization augmentation."""
+
         def __init__(self, p):
             self.p = p
 
@@ -39,6 +43,7 @@ class ContrastiveTransform:
 
     class TwoCropsTransform:
         """Apply two random augmentations to the same image."""
+
         def __init__(self, base_transform):
             self.base_transform = base_transform
 

@@ -12,14 +12,15 @@ class CaSSLePlugin(SelfDistillationPlugin):
     approach, introduced in https://arxiv.org/pdf/2112.04215.
     This is essentially a distillation approach adapted for self-supervised models.
     """
+
     def __init__(self, loss: nn.Module, output_dim: int = 128, hidden_dim: int = 2048):
-        super().__init__(distillation_loss=loss,
-                         output_dim=output_dim,
-                         hidden_dim=hidden_dim)
+        super().__init__(
+            distillation_loss=loss, output_dim=output_dim, hidden_dim=hidden_dim
+        )
 
     def before_backward(self, strategy, **kwargs):
         if self.frozen_backbone is None:
-           return
+            return
 
         additional_term = self.compute_additional_loss(strategy)
         strategy.loss += additional_term
@@ -27,20 +28,24 @@ class CaSSLePlugin(SelfDistillationPlugin):
     def compute_additional_loss(self, strategy):
         if isinstance(self.distillation_loss, BarlowTwinsLoss):
             frozen_output = self.frozen_forward(strategy.mb_x)
-            z1_frozen, z2_frozen = frozen_output['z_frozen']
+            z1_frozen, z2_frozen = frozen_output["z_frozen"]
 
-            z1, z2 = strategy.mb_output['z']
+            z1, z2 = strategy.mb_output["z"]
             p1 = self.distill_predictor(z1)
             p2 = self.distill_predictor(z2)
 
-            additional_term = (self.distillation_loss({'z': [p1, z1_frozen]})  # loss argument has to be a dictionary
-                               + self.distillation_loss({'z': [p2, z2_frozen]})) / 2
+            additional_term = (
+                self.distillation_loss(
+                    {"z": [p1, z1_frozen]}
+                )  # loss argument has to be a dictionary
+                + self.distillation_loss({"z": [p2, z2_frozen]})
+            ) / 2
             return additional_term
         elif isinstance(self.distillation_loss, NTXentLoss):
             frozen_output = self.frozen_forward(strategy.mb_x)
-            z1_frozen, z2_frozen = frozen_output['z_frozen']
+            z1_frozen, z2_frozen = frozen_output["z_frozen"]
 
-            z1, z2 = strategy.mb_output['z']
+            z1, z2 = strategy.mb_output["z"]
             p1 = self.distill_predictor(z1)
             p2 = self.distill_predictor(z2)
 
@@ -50,9 +55,12 @@ class CaSSLePlugin(SelfDistillationPlugin):
             ) / 2
             return additional_term
         else:
-            raise ValueError(f"Loss: {self.distillation_loss} is incompatible with CaSSLe")
+            raise ValueError(
+                f"Loss: {self.distillation_loss} is incompatible with CaSSLe"
+            )
 
-    def simclr_distill_loss_func(self,
+    def simclr_distill_loss_func(
+        self,
         p1: torch.Tensor,
         p2: torch.Tensor,
         z1: torch.Tensor,

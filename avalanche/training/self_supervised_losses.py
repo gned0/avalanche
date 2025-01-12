@@ -5,12 +5,12 @@ from sympy.physics.vector import outer
 
 
 class SimSiamLoss(nn.Module):
-    def __init__(self, version='simplified'):
+    def __init__(self, version="simplified"):
         super().__init__()
         self.ver = version
 
     def criterion(self, p, z):
-        if self.ver == 'original':
+        if self.ver == "original":
             z = z.detach()  # stop gradient
 
             p = nn.functional.normalize(p, dim=1)
@@ -18,14 +18,14 @@ class SimSiamLoss(nn.Module):
 
             return -(p * z).sum(dim=1).mean()
 
-        elif self.ver == 'simplified':
+        elif self.ver == "simplified":
             z = z.detach()  # stop gradient
-            return - nn.functional.cosine_similarity(p, z, dim=-1).mean()
+            return -nn.functional.cosine_similarity(p, z, dim=-1).mean()
 
     def forward(self, out):
 
-        p1, p2 = out['p']
-        z1, z2 = out['z']
+        p1, p2 = out["p"]
+        z1, z2 = out["z"]
 
         loss1 = self.criterion(p1, z2)
         loss2 = self.criterion(p2, z1)
@@ -34,22 +34,22 @@ class SimSiamLoss(nn.Module):
 
 
 class BarlowTwinsLoss(nn.Module):
-    def __init__(self, lambd=5e-3, device='cuda'):
+    def __init__(self, lambd=5e-3, device="cuda"):
         super().__init__()
         self.lambd = lambd
         self.device = device
 
     def forward(self, out):
-        z1, z2 = out['z']
-        z1_norm = (z1 - z1.mean(0)) / z1.std(0) # NxD
-        z2_norm = (z2 - z2.mean(0)) / z2.std(0) # NxD
+        z1, z2 = out["z"]
+        z1_norm = (z1 - z1.mean(0)) / z1.std(0)  # NxD
+        z2_norm = (z2 - z2.mean(0)) / z2.std(0)  # NxD
 
         N = z1.size(0)
         D = z1.size(1)
 
         # cross-correlation matrix
-        c = torch.mm(z1_norm.T, z2_norm) / N # DxD
-        c_diff = (c - torch.eye(D, device=self.device)).pow(2) # DxD
+        c = torch.mm(z1_norm.T, z2_norm) / N  # DxD
+        c_diff = (c - torch.eye(D, device=self.device)).pow(2)  # DxD
         # multiply off-diagonal elems of c_diff by lambda
         c_diff[~torch.eye(D, dtype=bool)] *= self.lambd
         loss = c_diff.sum()
@@ -63,7 +63,7 @@ class NTXentLoss(nn.Module):
         self.temperature = temperature
 
     def forward(self, out):
-        z1, z2 = out['z']
+        z1, z2 = out["z"]
         device = z1.device
 
         b = z1.size(0)

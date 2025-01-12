@@ -3,7 +3,8 @@ from avalanche.training.templates.strategy_mixin_protocol import (
     SupervisedStrategyProtocol,
     TSGDExperienceType,
     TMBInput,
-    TMBOutput, SelfSupervisedStrategyProtocol,
+    TMBOutput,
+    SelfSupervisedStrategyProtocol,
 )
 
 
@@ -25,7 +26,7 @@ class SelfSupervisedProblem(
         """Current mini-batch task labels."""
         mbatch = self.mbatch
         assert mbatch is not None
-        assert len(mbatch) >= 2, "Task label not found." # no label
+        assert len(mbatch) >= 2, "Task label not found."  # no label
         return mbatch[-1]
 
     def criterion(self):

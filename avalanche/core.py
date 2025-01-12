@@ -328,6 +328,7 @@ class SupervisedPlugin(BaseSGDPlugin[Template], ABC):
         """
         super().__init__()
 
+
 class SelfSupervisedPlugin(BaseSGDPlugin[Template], ABC):
     """ABC for SelfSupervisedTemplate plugins.
     Currently only serving a semantic/organizational purpose.
@@ -340,6 +341,7 @@ class SelfSupervisedPlugin(BaseSGDPlugin[Template], ABC):
         Initializes an instance of a self-supervised plugin.
         """
         super().__init__()
+
 
 class SupervisedMetaLearningPlugin(SupervisedPlugin[Template], ABC):
     """ABC for SupervisedMetaLearningTemplate plugins.

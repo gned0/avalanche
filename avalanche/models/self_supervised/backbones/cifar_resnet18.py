@@ -6,6 +6,7 @@ from torch import nn
 # SplitBatchNorm: simulate multi-gpu behavior of BatchNorm in one gpu by splitting along the batch dimension
 # implementation adapted from https://github.com/davidcpage/cifar10-fast/blob/master/torch_backend.py
 
+
 class SplitBatchNorm(nn.BatchNorm2d):
 
     def __init__(self, num_features, num_splits, **kw):
@@ -25,26 +26,38 @@ class SplitBatchNorm(nn.BatchNorm2d):
             running_var_split = self.running_var.repeat(self.num_splits)
 
             outcome = nn.functional.batch_norm(
+                input.view(-1, C * self.num_splits, H, W),
+                running_mean_split,
+                running_var_split,
+                self.weight.repeat(self.num_splits),
+                self.bias.repeat(self.num_splits),
+                True,
+                self.momentum,
+                self.eps,
+            ).view(N, C, H, W)
 
-                input.view(-1, C * self.num_splits, H, W), running_mean_split, running_var_split,
+            self.running_mean.data.copy_(
+                running_mean_split.view(self.num_splits, C).mean(dim=0)
+            )
 
-                self.weight.repeat(self.num_splits), self.bias.repeat(self.num_splits),
-
-                True, self.momentum, self.eps).view(N, C, H, W)
-
-            self.running_mean.data.copy_(running_mean_split.view(self.num_splits, C).mean(dim=0))
-
-            self.running_var.data.copy_(running_var_split.view(self.num_splits, C).mean(dim=0))
+            self.running_var.data.copy_(
+                running_var_split.view(self.num_splits, C).mean(dim=0)
+            )
 
             return outcome
 
         else:
 
             return nn.functional.batch_norm(
-
-                input, self.running_mean, self.running_var,
-
-                self.weight, self.bias, False, self.momentum, self.eps)
+                input,
+                self.running_mean,
+                self.running_var,
+                self.weight,
+                self.bias,
+                False,
+                self.momentum,
+                self.eps,
+            )
 
 
 class ModelBase(nn.Module):
@@ -66,7 +79,11 @@ class ModelBase(nn.Module):
 
         # use split batchnorm
 
-        norm_layer = partial(SplitBatchNorm, num_splits=bn_splits) if bn_splits > 1 else nn.BatchNorm2d
+        norm_layer = (
+            partial(SplitBatchNorm, num_splits=bn_splits)
+            if bn_splits > 1
+            else nn.BatchNorm2d
+        )
 
         resnet_arch = getattr(resnet, arch)
 
@@ -76,8 +93,10 @@ class ModelBase(nn.Module):
 
         for name, module in net.named_children():
 
-            if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            if name == "conv1":
+                module = nn.Conv2d(
+                    3, 64, kernel_size=3, stride=1, padding=1, bias=False
+                )
 
             if isinstance(module, nn.MaxPool2d):
                 continue
@@ -107,8 +126,10 @@ class ProbeModelBase(nn.Module):
         fc_layers = []
         for name, module in model_base.net.named_children():
 
-            if name == 'conv1':
-                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            if name == "conv1":
+                module = nn.Conv2d(
+                    3, 64, kernel_size=3, stride=1, padding=1, bias=False
+                )
 
             if isinstance(module, nn.MaxPool2d):
                 continue
@@ -117,7 +138,7 @@ class ProbeModelBase(nn.Module):
                 fc_layers.append(nn.Flatten(1))
                 fc_layers.append(module)
                 continue
-            
+
             backbone_layers.append(module)
 
         self.backbone = [
@@ -135,11 +156,11 @@ class ProbeModelBase(nn.Module):
             x = self.backbone[0](x)
         x = self.fc(x)
         return x
-    
+
     def to(self, device):
         self.backbone[0].to(device)
         self.fc.to(device)
         return self
 
-        
-__all__ = ['ModelBase', 'ProbeModelBase']
+
+__all__ = ["ModelBase", "ProbeModelBase"]

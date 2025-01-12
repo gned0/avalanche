@@ -7,11 +7,13 @@ from torchvision import models, transforms
 
 
 class BarlowTwins(nn.Module):
-    def __init__(self,
-                 backbone: nn.Module,
-                 projector_in_dim: int = 128,
-                 proj_hidden_dim: int = 2048,
-                 proj_output_dim: int = 2048):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        projector_in_dim: int = 128,
+        proj_hidden_dim: int = 2048,
+        proj_output_dim: int = 2048,
+    ):
         super().__init__()
 
         self.backbone = backbone
@@ -26,7 +28,6 @@ class BarlowTwins(nn.Module):
             nn.Linear(proj_hidden_dim, proj_output_dim, bias=False),
         )
 
-
     def forward(self, x):
         x1, x2 = torch.unbind(x, dim=1)
         f1 = self.backbone(x1)
@@ -34,8 +35,4 @@ class BarlowTwins(nn.Module):
         z1 = self.projector(f1)
         z2 = self.projector(f2)
 
-        return {
-            'z': [z1, z2],
-            'f': [f1, f2]
-        }
-
+        return {"z": [z1, z2], "f": [f1, f2]}

@@ -1,10 +1,10 @@
-
 import torch
 from typing import Tuple
 from torchvision import transforms
 from avalanche.core import SelfSupervisedPlugin
 from avalanche.training import ReservoirSamplingBuffer
 import numpy as np
+
 
 class LUMPPlugin(SelfSupervisedPlugin):
     """
@@ -14,7 +14,8 @@ class LUMPPlugin(SelfSupervisedPlugin):
     in self-supervised scenarios by revisiting the attributes of the past task
     that are similar to the current one (?).
     """
-    def __init__(self, alpha: float, buffer_size:int, device: torch.device, transform):
+
+    def __init__(self, alpha: float, buffer_size: int, device: torch.device, transform):
         super().__init__()
         self.alpha = alpha
         self.buffer = Buffer(buffer_size, device)
@@ -26,7 +27,9 @@ class LUMPPlugin(SelfSupervisedPlugin):
             # the dataloader.
             return
         else:
-            buf_inputs1, buf_inputs2 = self.buffer.get_data(strategy.mb_x.shape[0]) # get stored inputs by random sampling from buffer
+            buf_inputs1, buf_inputs2 = self.buffer.get_data(
+                strategy.mb_x.shape[0]
+            )  # get stored inputs by random sampling from buffer
             inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
             lam = torch.distributions.Beta(self.alpha, self.alpha).sample().item()
 
@@ -39,6 +42,7 @@ class LUMPPlugin(SelfSupervisedPlugin):
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
         inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
         self.buffer.add_data(examples=inputs1, labels=inputs2)
+
 
 def reservoir(num_seen_examples: int, buffer_size: int) -> int:
     """
@@ -61,13 +65,14 @@ class Buffer:
     """
     The memory buffer of rehearsal method.
     """
-    def __init__(self, buffer_size, device, mode='reservoir'):
-        assert mode in ['ring', 'reservoir']
+
+    def __init__(self, buffer_size, device, mode="reservoir"):
+        assert mode in ["ring", "reservoir"]
         self.buffer_size = buffer_size
         self.device = device
         self.num_seen_examples = 0
         self.functional_index = eval(mode)
-        self.attributes = ['examples', 'labels']
+        self.attributes = ["examples", "labels"]
 
     def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor) -> None:
         """
@@ -80,9 +85,16 @@ class Buffer:
         for attr_str in self.attributes:
             attr = eval(attr_str)
             if attr is not None and not hasattr(self, attr_str):
-                typ = torch.int64 if attr_str.endswith('els') else torch.float32
-                setattr(self, attr_str, torch.zeros((self.buffer_size,
-                        *attr.shape[1:]), dtype=typ, device=self.device))
+                typ = torch.int64 if attr_str.endswith("els") else torch.float32
+                setattr(
+                    self,
+                    attr_str,
+                    torch.zeros(
+                        (self.buffer_size, *attr.shape[1:]),
+                        dtype=typ,
+                        device=self.device,
+                    ),
+                )
 
     def add_data(self, examples, labels):
         """
@@ -93,7 +105,7 @@ class Buffer:
         :param task_labels: tensor containing the task labels
         :return:
         """
-        if not hasattr(self, 'examples'):
+        if not hasattr(self, "examples"):
             self.init_tensors(examples, labels)
 
         for i in range(examples.shape[0]):
@@ -103,8 +115,7 @@ class Buffer:
                 self.examples[index] = examples[i].to(self.device)
                 self.labels[index] = labels[i].to(self.device)
 
-
-    def get_data(self, size: int, transform: transforms=None) -> Tuple:
+    def get_data(self, size: int, transform: transforms = None) -> Tuple:
         """
         Random samples a batch of size items.
         :param size: the number of requested items
@@ -114,13 +125,20 @@ class Buffer:
         if size > min(self.num_seen_examples, self.examples.shape[0]):
             size = min(self.num_seen_examples, self.examples.shape[0])
 
-        choice = np.random.choice(min(self.num_seen_examples, self.examples.shape[0]),
-                                  size=size, replace=False)
-        if transform is None: transform = lambda x: x
+        choice = np.random.choice(
+            min(self.num_seen_examples, self.examples.shape[0]),
+            size=size,
+            replace=False,
+        )
+        if transform is None:
+            transform = lambda x: x
         # import pdb
         # pdb.set_trace()
-        ret_tuple = (torch.stack([transform(ee.cpu())
-                            for ee in self.examples[choice]]).to(self.device),)
+        ret_tuple = (
+            torch.stack([transform(ee.cpu()) for ee in self.examples[choice]]).to(
+                self.device
+            ),
+        )
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
                 attr = getattr(self, attr_str)
@@ -137,15 +155,17 @@ class Buffer:
         else:
             return False
 
-    def get_all_data(self, transform: transforms=None) -> Tuple:
+    def get_all_data(self, transform: transforms = None) -> Tuple:
         """
         Return all the items in the memory buffer.
         :param transform: the transformation to be applied (data augmentation)
         :return: a tuple with all the items in the memory buffer
         """
-        if transform is None: transform = lambda x: x
-        ret_tuple = (torch.stack([transform(ee.cpu())
-                            for ee in self.examples]).to(self.device),)
+        if transform is None:
+            transform = lambda x: x
+        ret_tuple = (
+            torch.stack([transform(ee.cpu()) for ee in self.examples]).to(self.device),
+        )
         for attr_str in self.attributes[1:]:
             if hasattr(self, attr_str):
                 attr = getattr(self, attr_str)

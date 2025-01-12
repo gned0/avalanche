@@ -2,13 +2,15 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+
 class SimCLR(nn.Module):
-    def  __init__(self,
-                 backbone: nn.Module,
-                 projector_in_dim: int = 128,
-                 proj_hidden_dim: int = 2048,
-                 proj_output_dim: int = 2048,
-                 ):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        projector_in_dim: int = 128,
+        proj_hidden_dim: int = 2048,
+        proj_output_dim: int = 2048,
+    ):
         super().__init__()
 
         self.backbone = backbone
@@ -26,8 +28,4 @@ class SimCLR(nn.Module):
         z1 = self.projector(f1)
         z2 = self.projector(f2)
 
-        return {
-            'z': [z1, z2],
-            'f': [f1, f2]
-        }
-
+        return {"z": [z1, z2], "f": [f1, f2]}

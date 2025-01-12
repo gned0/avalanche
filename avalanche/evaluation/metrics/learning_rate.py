@@ -37,7 +37,7 @@ class LearningRateMetric(Metric[float]):
         :return: None.
         """
         for param_group in optimizer.param_groups:
-            self._current_lr = param_group['lr']
+            self._current_lr = param_group["lr"]
             break
 
     def result(self) -> float:
@@ -58,7 +58,9 @@ class LearningRateMetric(Metric[float]):
 class LearningRatePluginMetric(GenericPluginMetric[float, LearningRateMetric]):
     def __init__(self, reset_at, emit_at, mode):
         self._lr = LearningRateMetric()
-        super(LearningRatePluginMetric, self).__init__(self._lr, reset_at, emit_at, mode)
+        super(LearningRatePluginMetric, self).__init__(
+            self._lr, reset_at, emit_at, mode
+        )
 
     def reset(self) -> None:
         self._metric.reset()

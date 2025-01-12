@@ -1,14 +1,16 @@
 import torch.nn
 from torch import nn
 
+
 class SimSiam(torch.nn.Module):
-    def  __init__(self,
-                 backbone: nn.Module,
-                 projector_in_dim: int = 128,
-                 proj_hidden_dim: int = 2048,
-                 proj_output_dim: int = 2048,
-                 pred_hidden_dim: int = 512,
-                 ):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        projector_in_dim: int = 128,
+        proj_hidden_dim: int = 2048,
+        proj_output_dim: int = 2048,
+        pred_hidden_dim: int = 512,
+    ):
         super().__init__()
 
         self.backbone = backbone
@@ -41,8 +43,4 @@ class SimSiam(torch.nn.Module):
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
 
-        return {
-            'f': [f1, f2],
-            'z': [z1, z2],
-            'p': [p1, p2]
-        }
+        return {"f": [f1, f2], "z": [z1, z2], "p": [p1, p2]}
