@@ -1,4 +1,5 @@
 from functools import partial
+import torch
 from torchvision.models import resnet
 from torch import nn
 
@@ -90,8 +91,55 @@ class ModelBase(nn.Module):
 
     def forward(self, x):
 
-        x = self.net(x)
+        return self.net(x)
 
-        # note: not normalized here
 
+class ProbeModelBase(nn.Module):
+    """
+    A model that takes a ModelBase and makes only the last layer trainable,
+    keeping the backbone frozen.
+    """
+
+    def __init__(self, model_base: ModelBase):
+        super().__init__()
+
+        backbone_layers = []
+        fc_layers = []
+        for name, module in model_base.net.named_children():
+
+            if name == 'conv1':
+                module = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+
+            if isinstance(module, nn.MaxPool2d):
+                continue
+
+            if isinstance(module, nn.Linear):
+                fc_layers.append(nn.Flatten(1))
+                fc_layers.append(module)
+                continue
+            
+            backbone_layers.append(module)
+
+        self.backbone = [
+            nn.Sequential(*backbone_layers),
+        ]
+
+        self.fc = nn.Sequential(*fc_layers)
+
+        self.backbone[0].eval()
+        for name, param in self.backbone[0].named_parameters():
+            param.requires_grad = False
+
+    def forward(self, x):
+        with torch.no_grad():
+            x = self.backbone[0](x)
+        x = self.fc(x)
         return x
+    
+    def to(self, device):
+        self.backbone[0].to(device)
+        self.fc.to(device)
+        return self
+
+        
+__all__ = ['ModelBase', 'ProbeModelBase']
