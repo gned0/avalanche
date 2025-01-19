@@ -3,7 +3,7 @@ from torch import nn
 import torch.nn.functional as F
 from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.training.plugins.self_distillation import SelfDistillationPlugin
-from avalanche.training.self_supervised_losses import BarlowTwinsLoss, NTXentLoss
+from avalanche.training.self_supervised_losses import BarlowTwinsLoss, ContrastiveDistillLoss
 
 
 class CaSSLePlugin(SelfDistillationPlugin):
@@ -13,7 +13,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
     This is essentially a distillation approach adapted for self-supervised models.
     """
 
-    def __init__(self, loss: nn.Module, output_dim: int = 128, hidden_dim: int = 2048):
+    def __init__(self, loss: nn.Module, output_dim: int = 256, hidden_dim: int = 2048):
         super().__init__(
             distillation_loss=loss, output_dim=output_dim, hidden_dim=hidden_dim
         )
@@ -42,7 +42,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
                 + self.distillation_loss({"z": [p2, z2_frozen]})
             ) / 2
             return additional_term
-        elif isinstance(self.distillation_loss, NTXentLoss):
+        elif isinstance(self.distillation_loss, ContrastiveDistillLoss):
             frozen_output = self.frozen_forward(strategy.mb_x)
             z1_frozen, z2_frozen = frozen_output["z_frozen"]
 
