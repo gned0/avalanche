@@ -23,6 +23,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
             return
 
         additional_term = self.compute_additional_loss(strategy)
+        #  no hyperparameter to weigh distillation loss with respect to the SSL loss.
         strategy.loss += additional_term
 
     def compute_additional_loss(self, strategy):
@@ -50,49 +51,11 @@ class CaSSLePlugin(SelfDistillationPlugin):
             p2 = self.distill_predictor(z2)
 
             additional_term = (
-                self.simclr_distill_loss_func(p1, p2, z1_frozen, z2_frozen)
-                + self.simclr_distill_loss_func(z1_frozen, z2_frozen, p1, p2)
+                self.distillation_loss(p1, p2, z1_frozen, z2_frozen)
+                + self.distillation_loss(z1_frozen, z2_frozen, p1, p2)
             ) / 2
             return additional_term
         else:
             raise ValueError(
                 f"Loss: {self.distillation_loss} is incompatible with CaSSLe"
             )
-
-    def simclr_distill_loss_func(
-        self,
-        p1: torch.Tensor,
-        p2: torch.Tensor,
-        z1: torch.Tensor,
-        z2: torch.Tensor,
-    ) -> torch.Tensor:
-
-        device = z1.device
-
-        b = z1.size(0)
-
-        p = F.normalize(torch.cat([p1, p2]), dim=-1)
-        z = F.normalize(torch.cat([z1, z2]), dim=-1)
-
-        logits = torch.einsum("if, jf -> ij", p, z) / self.distillation_loss.temperature
-        logits_max, _ = torch.max(logits, dim=1, keepdim=True)
-        logits = logits - logits_max.detach()
-
-        # positive mask are matches i, j (i from aug1, j from aug2), where i == j and matches j, i
-        pos_mask = torch.zeros((2 * b, 2 * b), dtype=torch.bool, device=device)
-        pos_mask.fill_diagonal_(True)
-
-        # all matches excluding the main diagonal
-        logit_mask = torch.ones_like(pos_mask, device=device)
-        logit_mask.fill_diagonal_(True)
-        logit_mask[:, b:].fill_diagonal_(True)
-        logit_mask[b:, :].fill_diagonal_(True)
-
-        exp_logits = torch.exp(logits) * logit_mask
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
-
-        # compute mean of log-likelihood over positives
-        mean_log_prob_pos = (pos_mask * log_prob).sum(1) / pos_mask.sum(1)
-        # loss
-        loss = -mean_log_prob_pos.mean()
-        return loss
