@@ -90,3 +90,47 @@ class NTXentLoss(nn.Module):
         # loss
         loss = -mean_log_prob_pos.mean()
         return loss
+
+class ContrastiveDistillLoss(nn.Module):
+    def __init__(self, temperature: float = 0.5):
+
+        super(ContrastiveDistillLoss, self).__init__()
+        self.temperature = temperature
+
+    def forward(
+            self,
+            p1: torch.Tensor,
+            p2: torch.Tensor,
+            z1: torch.Tensor,
+            z2: torch.Tensor,
+    ) -> torch.Tensor:
+
+        device = z1.device
+        b = z1.size(0)
+
+        # Normalize and concatenate predictions and representations.
+        p = F.normalize(torch.cat([p1, p2]), dim=-1)  # (2*b, feature_dim)
+        z = F.normalize(torch.cat([z1, z2]), dim=-1)  # (2*b, feature_dim)
+
+        # Compute similarity logits scaled by temperature
+        logits = torch.einsum("if, jf -> ij", p, z) / self.temperature
+
+        # For numerical stability subtract the maximum logit per sample.
+        logits_max, _ = torch.max(logits, dim=1, keepdim=True)
+        logits = logits - logits_max.detach()
+
+        pos_mask = torch.zeros((2 * b, 2 * b), dtype=torch.bool, device=device)
+        pos_mask.fill_diagonal_(True)
+
+        logit_mask = torch.ones_like(pos_mask, device=device)
+        logit_mask.fill_diagonal_(True)
+        logit_mask[:, b:].fill_diagonal_(True)
+        logit_mask[b:, :].fill_diagonal_(True)
+
+        exp_logits = torch.exp(logits) * logit_mask
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
+
+        mean_log_prob_pos = (pos_mask * log_prob).sum(1) / pos_mask.sum(1)
+
+        loss = -mean_log_prob_pos.mean()
+        return loss
