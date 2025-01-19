@@ -92,7 +92,7 @@ class NTXentLoss(nn.Module):
         return loss
 
 class ContrastiveDistillLoss(nn.Module):
-    def __init__(self, temperature: float = 0.5):
+    def __init__(self, temperature: float = 0.2):
 
         super(ContrastiveDistillLoss, self).__init__()
         self.temperature = temperature
