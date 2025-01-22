@@ -25,7 +25,6 @@ def main(args):
     backbone.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=2, bias=False)
     backbone.maxpool = nn.Identity()
 
-
     num_classes = 100
     in_features = backbone.fc.in_features
     backbone.fc = nn.Linear(in_features, num_classes)
@@ -49,7 +48,6 @@ def main(args):
             else:
                 new_state_dict[key] = value
 
-        # Load the modified state_dict into the model
         missing_keys, unexpected_keys = classifier.load_state_dict(new_state_dict, strict=False)
         print(f"Missing keys: {missing_keys}")
         print(f"Unexpected keys: {unexpected_keys}")
@@ -59,19 +57,15 @@ def main(args):
     print('Model for linear evaluation:')
     print(classifier)
 
-    # Freeze all parameters except the final fc layer.
     for name, param in classifier.named_parameters():
-        # We expect the last layer to be "fc.weight" and "fc.bias" in torchvision's ResNet18.
         if name not in ["fc.weight", "fc.bias"]:
             param.requires_grad = False
 
-    # Capture initial state of parameters and buffers.
     initial_params = {name: param.clone().cpu() for name, param in classifier.named_parameters()}
     initial_buffers = {name: buffer.clone().cpu() for name, buffer in classifier.named_buffers()}
 
-    # Benchmark: Here we use SplitCIFAR100. You can change to SplitCIFAR10 if desired.
     benchmark = SplitCIFAR100(
-        n_experiences=1,
+        n_experiences=args.n_experiences,
         dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
     )
     # If you need CIFAR10, uncomment the following lines and comment the above:
@@ -80,7 +74,6 @@ def main(args):
     #     dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
     # )
 
-    # Set up loggers for evaluation metrics.
     interactive_logger = InteractiveLogger()
     loggers = [interactive_logger]
 
@@ -98,7 +91,6 @@ def main(args):
         loggers=loggers,
     )
 
-    # Optimizer and training strategy: Only the final layer parameters will be updated.
     optimizer = torch.optim.AdamW(
         filter(lambda p: p.requires_grad, classifier.parameters()), lr=0.001
     )
@@ -114,17 +106,14 @@ def main(args):
         evaluator=eval_plugin,
     )
 
-    # Train and evaluate.
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
         strategy.train(experience, num_workers=4, persistent_workers=True, drop_last=True)
         strategy.eval(benchmark.test_stream[:], num_workers=4)
 
-    # Capture final state of parameters and buffers.
     final_params = {name: param.cpu() for name, param in classifier.named_parameters()}
     final_buffers = {name: buffer.cpu() for name, buffer in classifier.named_buffers()}
 
-    # Check which parameters were changed.
     print("\nParameters updated during training:")
     for name in initial_params:
         if not torch.equal(initial_params[name], final_params[name]):
@@ -143,5 +132,6 @@ if __name__ == "__main__":
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
     parser.add_argument("--tb_path", type=str, default=None,
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
+    parser.add_argument("--n_experiences", type=int, default=1, help="Number of experiences for the benchmark.")
     args = parser.parse_args()
     main(args)
