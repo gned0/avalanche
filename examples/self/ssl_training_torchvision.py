@@ -73,7 +73,7 @@ def main(args):
         raise ValueError(f"Unsupported SSL method: {args.ssl_method}")
 
     benchmark = SplitCIFAR100(
-        n_experiences=5,
+        n_experiences=args.n_experiences,
         dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         train_transform=transform,
         eval_transform=transform,
@@ -117,6 +117,7 @@ def main(args):
                 scheduler=scheduler,
                 step_granularity="iteration",
             ),
+            CaSSLePlugin(loss=loss_fn),
         ],
         train_mb_size=train_mb_size,
         evaluator=eval_plugin,
@@ -144,5 +145,6 @@ if __name__ == "__main__":
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     parser.add_argument("--backbone_checkpoint", type=str, default=None,
                         help="Optional: Path to a checkpoint to load backbone weights. If not provided, backbone starts from scratch.")
+    parser.add_argument("--n_experiences", type=int, default=5, help="Number of experiences for the benchmark.")
     args = parser.parse_args()
     main(args)
