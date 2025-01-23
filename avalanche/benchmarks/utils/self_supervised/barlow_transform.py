@@ -20,7 +20,7 @@ class BarlowTwinsTransform(ContrastiveTransform):
                     [transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.8
                 ),
                 transforms.RandomGrayscale(p=0.2),
-                transforms.RandomApply([self.GaussianBlur([0.1, 2.0])], p=1.0),
+                transforms.RandomApply([self.GaussianBlur([0.1, 2.0])], p=0.0),
                 self.Solarization(p=0.0),
                 transforms.ToTensor(),
                 self.normalize,
@@ -34,7 +34,7 @@ class BarlowTwinsTransform(ContrastiveTransform):
                     [transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)], p=0.8
                 ),
                 transforms.RandomGrayscale(p=0.2),
-                transforms.RandomApply([self.GaussianBlur([0.1, 2.0])], p=0.1),
+                transforms.RandomApply([self.GaussianBlur([0.1, 2.0])], p=0.0),
                 self.Solarization(p=0.2),
                 transforms.ToTensor(),
                 self.normalize,
