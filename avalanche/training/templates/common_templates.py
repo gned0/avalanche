@@ -141,6 +141,7 @@ class SupervisedTemplate(
             super().__init__()
             BaseSGDTemplate.__init__(self=self, **kwargs)
 
+
 class SelfSupervisedTemplate(
     BatchObservation[TDatasetExperience, TMBInput, TMBInput],
     SelfSupervisedProblem[TDatasetExperience, TMBInput, TMBInput],
@@ -210,6 +211,7 @@ class SelfSupervisedTemplate(
         else:
             super().__init__()
             BaseSGDTemplate.__init__(self=self, **kwargs)
+
 
 class SupervisedMetaLearningTemplate(
     BatchObservation[TDatasetExperience, TMBInput, TMBInput],
