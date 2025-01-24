@@ -34,9 +34,10 @@ class SimSiamLoss(nn.Module):
 
 
 class BarlowTwinsLoss(nn.Module):
-    def __init__(self, lambd=5e-3, device="cuda"):
+    def __init__(self, lambd=5e-3, scale_loss=0.025, device="cuda"):
         super().__init__()
         self.lambd = lambd
+        self.scale_loss = scale_loss
         self.device = device
 
     def forward(self, out):
@@ -47,13 +48,12 @@ class BarlowTwinsLoss(nn.Module):
         N = z1.size(0)
         D = z1.size(1)
 
-        # cross-correlation matrix
-        c = torch.mm(z1_norm.T, z2_norm) / N  # DxD
-        c_diff = (c - torch.eye(D, device=self.device)).pow(2)  # DxD
-        # multiply off-diagonal elems of c_diff by lambda
-        c_diff[~torch.eye(D, dtype=bool)] *= self.lambd
-        loss = c_diff.sum()
+        corr = torch.einsum("bi, bj -> ij", z1_norm, z2_norm) / N
 
+        diag = torch.eye(D, device=corr.device)
+        cdif = (corr - diag).pow(2)
+        cdif[~diag.bool()] *= self.lambd
+        loss = self.scale_loss * cdif.sum()
         return loss
 
 
@@ -92,7 +92,7 @@ class NTXentLoss(nn.Module):
         return loss
 
 class ContrastiveDistillLoss(nn.Module):
-    def __init__(self, temperature: float = 0.5):
+    def __init__(self, temperature: float = 0.2):
 
         super(ContrastiveDistillLoss, self).__init__()
         self.temperature = temperature

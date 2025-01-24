@@ -9,7 +9,7 @@ class SimCLR(nn.Module):
         backbone: nn.Module,
         projector_in_dim: int = 128,
         proj_hidden_dim: int = 2048,
-        proj_output_dim: int = 2048,
+        proj_output_dim: int = 256,
     ):
         super().__init__()
 
