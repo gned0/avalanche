@@ -5,18 +5,20 @@ import torch
 from os.path import expanduser
 from os.path import abspath, dirname
 
+sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.logging.tensorboard_logger import TensorboardLogger
 from avalanche.logging.text_logging import TextLogger
-sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-from avalanche.benchmarks import SplitCIFAR10
+from avalanche.benchmarks import SplitCIFAR100
 from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase, ProbeModelBase
 from avalanche.training import Naive
+from torchvision import transforms
 from avalanche.evaluation.metrics import (
     loss_metrics, accuracy_metrics, confusion_matrix_metrics,
 )
 from avalanche.logging import InteractiveLogger
 from avalanche.training.plugins import EvaluationPlugin
 from torch import nn
+from avalanche.training.plugins import ReplayPlugin
 
 def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,7 +26,7 @@ def main(args):
 
     # Load model weights
     state_dict = torch.load(args.weights_path, map_location=device)
-    classifier = ModelBase(feature_dim=10, arch="resnet18", bn_splits=8)
+    classifier = ModelBase(feature_dim=100, arch="resnet18", bn_splits=8)
 
     # Freeze all layers except the last fc
     for name, param in classifier.named_parameters():
@@ -45,11 +47,20 @@ def main(args):
     initial_buffers = {name: buffer.clone() for name, buffer in classifier.named_buffers()}
     initial_params_backbone = {name: param.clone() for name, param in classifier.backbone[0].named_parameters()}
     initial_buffers_backbone = {name: buffer.clone() for name, buffer in classifier.backbone[0].named_buffers()}
+    
+    transform = transforms.Compose([
+                transforms.RandomResizedCrop(size=32, scale=(0.08, 1.0)),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+            ])
 
     # Benchmark
-    benchmark = SplitCIFAR10(
+    benchmark = SplitCIFAR100(
         n_experiences=1,
-        dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
+        return_task_id=False,
+	train_transform=transform,
+        dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         seed=1234,
     )
 
@@ -67,13 +78,13 @@ def main(args):
     eval_plugin = EvaluationPlugin(
         loss_metrics(experience=True, stream=True, epoch=True),
         accuracy_metrics(experience=True, stream=True, epoch=True),
-        confusion_matrix_metrics(num_classes=10, save_image=False, stream=True),
+        confusion_matrix_metrics(num_classes=100, save_image=False, stream=True),
         loggers=loggers,
     )
 
     # Optimizer and strategy
     optimizer = torch.optim.AdamW(
-        classifier.parameters(), lr=0.001
+        classifier.parameters(), lr=0.01
     )
     criterion = nn.CrossEntropyLoss()
     strategy = Naive(
@@ -89,9 +100,9 @@ def main(args):
     # Train and evaluate
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=12, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=12)
-
+        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=8)
+	
     # Capture final state of parameters
     final_params = {name: param.cpu() for name, param in classifier.named_parameters()}
     final_buffers = {name: buffer.cpu() for name, buffer in classifier.named_buffers()}
