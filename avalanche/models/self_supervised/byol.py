@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional, Dict, List
 
-from avalanche.models.self_supervised.self_supervised_model import SelfSupervisedMomentumModel
+from avalanche.models.self_supervised.base import SelfSupervisedMomentumModel
 
 
 class BYOL(SelfSupervisedMomentumModel):
