@@ -6,6 +6,11 @@ import sys
 from os.path import abspath, dirname
 import os
 
+from sympy.geometry.entity import translate
+
+from avalanche.benchmarks.datasets import CIFAR10
+from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
+
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
 from avalanche.benchmarks import SplitCIFAR10
@@ -17,7 +22,7 @@ from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
 from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
 from avalanche.training.plugins import LRSchedulerPlugin, ReplayPlugin
 from avalanche.training.self_supervised_losses import SimSiamLoss, BarlowTwinsLoss, NTXentLoss
-from avalanche.evaluation.metrics import loss_metrics
+from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
 
@@ -25,22 +30,11 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Select SSL method
-    if args.ssl_method == "simsiam":
-        model = SimSiam(backbone=ModelBase(feature_dim=128, arch="resnet18", bn_splits=8))
-        transform = SimSiamTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-        loss_fn = SimSiamLoss()
-    elif args.ssl_method == "barlow":
-        model = BarlowTwins(backbone=ModelBase(feature_dim=128, arch="resnet18", bn_splits=8))
-        transform = BarlowTwinsTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-        loss_fn = BarlowTwinsLoss()
-    elif args.ssl_method == "simclr":
-        model = SimCLR(backbone=ModelBase(feature_dim=128, arch="resnet18", bn_splits=8))
-        transform = SimCLRTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-        loss_fn = NTXentLoss()
-    else:
-        raise ValueError(f"Unsupported SSL method: {args.ssl_method}")
+    backbone = ModelBase(feature_dim=128, arch="resnet18", bn_splits=8)
+    model = SimCLR(backbone=backbone, num_classes=10)
 
+    transform = CIFARTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+    loss_fn = NTXentLoss(temperature=0.1)
     # Benchmark
     benchmark = SplitCIFAR10(
         n_experiences=1,
@@ -63,13 +57,14 @@ def main(args):
 
     eval_plugin = EvaluationPlugin(
         loss_metrics(minibatch=True, epoch=True, experience=True),
+        accuracy_metrics(minibatch=True, epoch=True, experience=True),
         learning_rate_metrics(minibatch=True),
         loggers=loggers,
     )
 
     # Optimizer and strategy
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.06, weight_decay=5e-4, momentum=0.9)
-    train_mb_size = 512
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.03, weight_decay=5e-4, momentum=0.9)
+    train_mb_size = 256
     n_batches_per_epoch = len(benchmark.train_stream[0].dataset) // train_mb_size
     n_restarts = 5
 
@@ -102,8 +97,8 @@ def main(args):
     # Train
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=16, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=16)
+        strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=2)
 
     # Save weights
     save_path = args.save_path
