@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Dict, List
-from avalanche.models.self_supervised import SelfSupervisedModel
+from avalanche.models.self_supervised.base import SelfSupervisedModel
 
 class SimSiam(SelfSupervisedModel):
     def __init__(
