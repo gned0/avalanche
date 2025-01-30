@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Optional, Dict, List
 
+from avalanche.models.self_supervised import SelfSupervisedModel
+
+
 class BarlowTwins(SelfSupervisedModel):
     def __init__(
         self,
