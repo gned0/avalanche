@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from sympy.physics.vector import outer
-
 
 class SimSiamLoss(nn.Module):
     def __init__(self, version="simplified"):
@@ -134,3 +132,22 @@ class ContrastiveDistillLoss(nn.Module):
 
         loss = -mean_log_prob_pos.mean()
         return loss
+
+class BYOLLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, out) -> torch.Tensor:
+        p1, p2 = out["p"]
+        z1, z2 = out["z"]
+
+        p1 = F.normalize(p1, dim=-1)
+        p2 = F.normalize(p2, dim=-1)
+        z1 = F.normalize(z1, dim=-1)
+        z2 = F.normalize(z2, dim=-1)
+
+        # Mean Squared Error between p and z'
+        loss1 = 2 - 2 * (p1 * z2).sum(dim=-1)
+        loss2 = 2 - 2 * (p2 * z1).sum(dim=-1)
+
+        return (loss1 + loss2).mean()
