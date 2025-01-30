@@ -33,11 +33,11 @@ class SelfSupervisedModel(nn.Module):
         f1 = self.backbone(x1)
         f2 = self.backbone(x2)
 
-        output = {"f": [f1, f2]}
+        out = {"f": [f1, f2]}
 
         if self.classifier is not None:
-            output["logits"] = self.classifier(f1.detach())
+            out["logits"] = self.classifier(f1.detach())
 
-        return output
+        return out
 
 

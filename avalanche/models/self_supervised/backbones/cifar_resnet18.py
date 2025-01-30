@@ -76,7 +76,7 @@ class ModelBase(nn.Module):
     def __init__(self, feature_dim=128, arch=None, bn_splits=16):
 
         super(ModelBase, self).__init__()
-
+        self.feature_dim = feature_dim
         # use split batchnorm
 
         norm_layer = (
