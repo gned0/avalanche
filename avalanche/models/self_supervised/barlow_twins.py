@@ -1,23 +1,19 @@
-import random
-
 import torch
-from PIL import ImageFilter, ImageOps, Image
-from torch import nn
-from torchvision import models, transforms
+import torch.nn as nn
+from typing import Optional, Dict, List
 
-
-class BarlowTwins(nn.Module):
+class BarlowTwins(SelfSupervisedModel):
     def __init__(
         self,
         backbone: nn.Module,
-        projector_in_dim: int = 128,
+        projector_in_dim: int,
         proj_hidden_dim: int = 2048,
         proj_output_dim: int = 2048,
+        num_classes: Optional[int] = None
     ):
-        super().__init__()
+        super().__init__(backbone=backbone, num_classes=num_classes)
 
-        self.backbone = backbone
-
+        # Define the projector
         self.projector = nn.Sequential(
             nn.Linear(projector_in_dim, proj_hidden_dim, bias=False),
             nn.BatchNorm1d(proj_hidden_dim),
@@ -28,11 +24,12 @@ class BarlowTwins(nn.Module):
             nn.Linear(proj_hidden_dim, proj_output_dim, bias=False),
         )
 
-    def forward(self, x):
-        x1, x2 = torch.unbind(x, dim=1)
-        f1 = self.backbone(x1)
-        f2 = self.backbone(x2)
+    def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
+        out = super().forward(x)
+        f1, f2 = out["f"]
+
         z1 = self.projector(f1)
         z2 = self.projector(f2)
 
-        return {"z": [z1, z2], "f": [f1, f2]}
+        out["z"] = [z1, z2]
+        return out
