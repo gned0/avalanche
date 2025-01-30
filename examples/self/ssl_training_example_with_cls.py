@@ -4,24 +4,20 @@ import torch
 from os.path import expanduser
 import sys
 from os.path import abspath, dirname
-import os
 
-from sympy.geometry.entity import translate
-
-from avalanche.benchmarks.datasets import CIFAR10
-from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
 
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
+from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
+
 from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
 from avalanche.benchmarks import SplitCIFAR10
 from avalanche.benchmarks.utils.self_supervised.barlow_transform import BarlowTwinsTransform
 from avalanche.benchmarks.utils.self_supervised.simclr_transform import SimCLRTransform
-from avalanche.benchmarks.utils.self_supervised.simsiam_transform import SimSiamTransform
-from avalanche.models.self_supervised import SimSiam, SimCLR, BarlowTwins
+from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
 from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
 from avalanche.training.plugins import LRSchedulerPlugin, ReplayPlugin
-from avalanche.training.self_supervised_losses import SimSiamLoss, BarlowTwinsLoss, NTXentLoss
+from avalanche.training.self_supervised_losses import NTXentLoss
 from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
@@ -30,7 +26,7 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    backbone = ModelBase(feature_dim=128, arch="resnet18", bn_splits=8)
+    backbone = ModelBase(feature_dim=args.feature_dim, arch="resnet18", bn_splits=8)
     model = SimCLR(backbone=backbone, num_classes=10)
 
     transform = CIFARTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
@@ -111,9 +107,10 @@ if __name__ == "__main__":
     parser.add_argument("--ssl_method", type=str, default="simsiam",
                         help="Self-supervised learning method: simsiam, barlow, or simclr.")
     parser.add_argument("--save_path", type=str, required=True, help="Path to save the trained model weights.")
-    parser.add_argument("--epochs", type=int, default=800, help="Number of training epochs.")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs.")
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
+    parser.add_argument("--feature_dim", type=int, default=128)
     parser.add_argument("--tb_path", type=str, default=None,
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     args = parser.parse_args()
