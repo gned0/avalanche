@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from typing import Optional, Dict, List
-from avalanche.models.self_supervised.self_supervised_model import SelfSupervisedModel
+from avalanche.models.self_supervised.base import SelfSupervisedModel
 
 class SimCLR(SelfSupervisedModel):
     def __init__(
