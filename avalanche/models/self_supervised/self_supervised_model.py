@@ -36,8 +36,7 @@ class SelfSupervisedModel(nn.Module):
         output = {"f": [f1, f2]}
 
         if self.classifier is not None:
-            logits = self.classifier(f1.detach())
-            output["l"] = [logits]
+            output["logits"] = self.classifier(f1.detach())
 
         return output
 
