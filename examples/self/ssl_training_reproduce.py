@@ -1,13 +1,15 @@
 import argparse
 import math
+from sched import scheduler
+
 import torch
 from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
-from avalanche.models.self_supervised import BarlowTwins
-from avalanche.training.warmup_cosine_scheduler import LARSWrapper, LinearWarmupCosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from avalanche.models.self_supervised import BarlowTwins
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
@@ -78,8 +80,11 @@ def main(args):
     warmup_steps = 10 * n_batches_per_epoch
     overall_steps = args.epochs * n_batches_per_epoch
 
-    scheduler = LinearWarmupCosineAnnealingLR(optimizer=sgd, warmup_steps=warmup_steps, total_steps=overall_steps,
-                                              last_epoch=500)
+    scheduler = CosineAnnealingLR(
+        optimizer=sgd,
+        T_max=overall_steps,
+        eta_min=0.0,
+    )
 
     strategy = SelfNaive(
         model=model,
