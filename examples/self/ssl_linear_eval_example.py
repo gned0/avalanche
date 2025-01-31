@@ -4,11 +4,10 @@ import argparse
 import torch
 from os.path import expanduser
 from os.path import abspath, dirname
-
+sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.logging.tensorboard_logger import TensorboardLogger
 from avalanche.logging.text_logging import TextLogger
-sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-from avalanche.benchmarks import SplitCIFAR10
+from avalanche.benchmarks import SplitCIFAR100
 from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase, ProbeModelBase
 from avalanche.training import Naive
 from avalanche.evaluation.metrics import (
@@ -24,7 +23,7 @@ def main(args):
 
     # Load model weights
     state_dict = torch.load(args.weights_path, map_location=device)
-    classifier = ModelBase(feature_dim=10, arch="resnet18", bn_splits=8)
+    classifier = ModelBase(feature_dim=100, arch="resnet18", bn_splits=8)
 
     # Freeze all layers except the last fc
     for name, param in classifier.named_parameters():
@@ -47,9 +46,9 @@ def main(args):
     initial_buffers_backbone = {name: buffer.clone() for name, buffer in classifier.backbone[0].named_buffers()}
 
     # Benchmark
-    benchmark = SplitCIFAR10(
+    benchmark = SplitCIFAR100(
         n_experiences=1,
-        dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
+        dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         seed=1234,
     )
 
@@ -89,8 +88,8 @@ def main(args):
     # Train and evaluate
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=12, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=12)
+        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=8)
 
     # Capture final state of parameters
     final_params = {name: param.cpu() for name, param in classifier.named_parameters()}

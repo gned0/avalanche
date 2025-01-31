@@ -10,7 +10,7 @@ sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
 
 from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
-from avalanche.benchmarks import SplitCIFAR10
+from avalanche.benchmarks import SplitCIFAR100
 from avalanche.benchmarks.utils.self_supervised.barlow_transform import BarlowTwinsTransform
 from avalanche.benchmarks.utils.self_supervised.simclr_transform import SimCLRTransform
 from avalanche.models.self_supervised.simclr import SimCLR
@@ -27,14 +27,14 @@ def main(args):
     print(f"Using device: {device}")
 
     backbone = ModelBase(feature_dim=args.feature_dim, arch="resnet18", bn_splits=8)
-    model = SimCLR(backbone=backbone, num_classes=10)
+    model = SimCLR(backbone=backbone, num_classes=100)
 
-    transform = CIFARTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+    transform = SimCLRTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
     loss_fn = NTXentLoss(temperature=0.1)
     # Benchmark
-    benchmark = SplitCIFAR10(
-        n_experiences=1,
-        dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
+    benchmark = SplitCIFAR100(
+        n_experiences=5,
+        dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         train_transform=transform,
         eval_transform=transform,
         seed=1234,
@@ -93,8 +93,8 @@ def main(args):
     # Train
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=2)
+        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=8)
 
     # Save weights
     save_path = args.save_path
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs.")
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
-    parser.add_argument("--feature_dim", type=int, default=128)
+    parser.add_argument("--feature_dim", type=int, default=512)
     parser.add_argument("--tb_path", type=str, default=None,
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     args = parser.parse_args()
