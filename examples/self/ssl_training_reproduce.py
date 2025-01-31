@@ -7,7 +7,6 @@ from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
-
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from avalanche.models.self_supervised import BarlowTwins
@@ -36,7 +35,7 @@ def main(args):
     model = BarlowTwins(backbone=backbone, num_classes=100)
 
     transform = BarlowTwinsTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-    loss_fn = BarlowTwinsLoss()
+    loss_fn = BarlowTwinsLoss(scale_loss=0.1)
     # Benchmark
     sequence = [
     11, 22, 39, 23, 42, 30, 78, 81, 64, 20, 29, 79, 15, 69, 86, 63, 55, 53, 73, 68,
@@ -73,7 +72,7 @@ def main(args):
     )
 
     # Optimizer and strategy
-    sgd = torch.optim.SGD(model.parameters(), lr=0.3, weight_decay=1e-4)
+    sgd = torch.optim.SGD(model.parameters(), lr=0.03, weight_decay=1e-4)
     train_mb_size = 256
 
     n_batches_per_epoch = len(benchmark.train_stream[0].dataset) // train_mb_size
@@ -97,7 +96,6 @@ def main(args):
                 scheduler=scheduler,
                 step_granularity="iteration",
             ),
-            MomentumUpdatePlugin(),
         ],
         train_mb_size=train_mb_size,
         evaluator=eval_plugin,
