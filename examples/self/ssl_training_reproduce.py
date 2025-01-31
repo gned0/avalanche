@@ -7,10 +7,10 @@ from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from avalanche.models.self_supervised import BarlowTwins
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from avalanche.models.self_supervised import BarlowTwins
 from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
 from avalanche.models.self_supervised.byol import BYOL
