@@ -8,31 +8,17 @@ from avalanche.models.self_supervised.base import SelfSupervisedMomentumModel
 class BYOL(SelfSupervisedMomentumModel):
     def __init__(
         self,
-        online_backbone: nn.Module,
-        target_backbone: nn.Module,
-        in_dim: int,
+        backbone: nn.Module,
         hidden_dim: int = 4096,
         out_dim: int = 256,
         num_classes: Optional[int] = None,
         momentum: float = 0.999,
     ):
-        """
-        A simplified BYOL model with an optional classifier.
-
-        Args:
-            online_backbone (nn.Module): Online backbone network.
-            target_backbone (nn.Module): Target backbone network (same architecture as online).
-            in_dim (int): Input dimension to the projector (should match backbone.feature_dim).
-            hidden_dim (int): Hidden dimension for projector/predictor MLP.
-            out_dim (int): Output dimension for projector/predictor MLP.
-            num_classes (Optional[int]): Number of classes for classification.
-            momentum (float): EMA momentum for target updates.
-        """
-        super().__init__(online_backbone, target_backbone, num_classes=num_classes, momentum=momentum)
-
+        super().__init__(backbone, num_classes=num_classes, momentum=momentum)
+        self.feature_dim = backbone.feature_dim
         # Online Projector
         self.online_projector = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
+            nn.Linear(self.feature_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, out_dim),
@@ -48,7 +34,7 @@ class BYOL(SelfSupervisedMomentumModel):
 
         # Target Projector
         self.target_projector = nn.Sequential(
-            nn.Linear(in_dim, hidden_dim),
+            nn.Linear(self.feature_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, out_dim),
@@ -102,8 +88,8 @@ class BYOL(SelfSupervisedMomentumModel):
         (x1, x2) = torch.unbind(x, dim=1)
 
         # online network
-        f1_online = self.online_backbone(x1)
-        f2_online = self.online_backbone(x2)
+        f1_online = self.backbone(x1)
+        f2_online = self.backbone(x2)
 
         z1_online = self.online_projector(f1_online)
         z2_online = self.online_projector(f2_online)

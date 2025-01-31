@@ -5,19 +5,20 @@ from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
+from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
-
+from avalanche.models.self_supervised.byol import BYOL
 from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
-from avalanche.benchmarks import SplitCIFAR100
+from avalanche.benchmarks import SplitCIFAR100, SplitCIFAR10
 from avalanche.benchmarks.utils.self_supervised.barlow_transform import BarlowTwinsTransform
 from avalanche.benchmarks.utils.self_supervised.simclr_transform import SimCLRTransform
 from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
 from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
 from avalanche.training.plugins import LRSchedulerPlugin, ReplayPlugin
-from avalanche.training.self_supervised_losses import NTXentLoss
+from avalanche.training.self_supervised_losses import NTXentLoss, BarlowTwinsLoss, BYOLLoss
 from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
@@ -27,14 +28,14 @@ def main(args):
     print(f"Using device: {device}")
 
     backbone = ModelBase(feature_dim=args.feature_dim, arch="resnet18", bn_splits=8)
-    model = SimCLR(backbone=backbone, num_classes=100)
+    model = BYOL(backbone=backbone, num_classes=100)
 
-    transform = SimCLRTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-    loss_fn = NTXentLoss(temperature=0.1)
+    transform = BarlowTwinsTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+    loss_fn = BYOLLoss()
     # Benchmark
-    benchmark = SplitCIFAR100(
-        n_experiences=5,
-        dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
+    benchmark = SplitCIFAR10(
+        n_experiences=1,
+        dataset_root=expanduser("~") + "/.avalanche/data/cifar10/",
         train_transform=transform,
         eval_transform=transform,
         seed=1234,
@@ -85,7 +86,13 @@ def main(args):
         criterion=loss_fn,
         train_epochs=args.epochs,
         device=device,
-
+        plugins=[
+            LRSchedulerPlugin(
+                scheduler=scheduler,
+                step_granularity="iteration",
+            ),
+            MomentumUpdatePlugin(),
+        ],
         train_mb_size=train_mb_size,
         evaluator=eval_plugin,
     )
@@ -93,8 +100,8 @@ def main(args):
     # Train
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
-        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=8)
+        strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=2)
 
     # Save weights
     save_path = args.save_path
