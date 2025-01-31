@@ -7,12 +7,12 @@ class SimSiam(SelfSupervisedModel):
     def __init__(
         self,
         backbone: nn.Module,
-        projector_in_dim: int,
         proj_hidden_dim: int = 2048,
         proj_output_dim: int = 2048,
         pred_hidden_dim: int = 512,
         num_classes: Optional[int] = None
     ):
+        projector_in_dim = backbone.feature_dim
         super().__init__(backbone=backbone, num_classes=num_classes)
 
         self.projector = nn.Sequential(
