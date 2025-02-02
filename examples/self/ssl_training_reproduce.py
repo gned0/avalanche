@@ -8,7 +8,7 @@ import sys
 from os.path import abspath, dirname
 
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from avalanche.models.self_supervised import BarlowTwins
 from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
@@ -72,17 +72,29 @@ def main(args):
     )
 
     # Optimizer and strategy
-    sgd = torch.optim.SGD(model.parameters(), lr=0.03, weight_decay=1e-4)
+    sgd = torch.optim.SGD(model.parameters(), lr=0.3, weight_decay=1e-4)
     train_mb_size = 256
 
     n_batches_per_epoch = len(benchmark.train_stream[0].dataset) // train_mb_size
     warmup_steps = 10 * n_batches_per_epoch
     overall_steps = args.epochs * n_batches_per_epoch
 
-    scheduler = CosineAnnealingLR(
+    warmup_scheduler = LinearLR(
         optimizer=sgd,
-        T_max=overall_steps,
-        eta_min=0.0,
+        start_factor=0.01,
+        total_iters=3
+    )
+
+    cosine_scheduler = CosineAnnealingLR(
+        optimizer=sgd,
+        T_max=args.epochs - 3,
+        eta_min=0.0
+    )
+
+    scheduler = SequentialLR(
+        optimizer=sgd,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[3]
     )
 
     strategy = SelfNaive(
@@ -94,7 +106,7 @@ def main(args):
         plugins=[
             LRSchedulerPlugin(
                 scheduler=scheduler,
-                step_granularity="iteration",
+                step_granularity="epoch",
             ),
         ],
         train_mb_size=train_mb_size,
@@ -105,8 +117,8 @@ def main(args):
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
         print(f"Classes: {experience.classes_in_this_experience}")
+        # strategy.make_optimizer(reset_optimizer_state=True)
         strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
-        strategy.make_optimizer(reset_optimizer_state=True)
         strategy.eval(benchmark.test_stream[:], num_workers=2)
 
     # Save weights
