@@ -1,15 +1,13 @@
 import argparse
-import math
-from sched import scheduler
-
 import torch
 from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
+
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 from avalanche.models.self_supervised import BarlowTwins
+from avalanche.training.plugins.cassle import CaSSLePlugin
 from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
 from avalanche.models.self_supervised.byol import BYOL
@@ -25,6 +23,8 @@ from avalanche.training.self_supervised_losses import NTXentLoss, BarlowTwinsLos
 from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
+from avalanche.training.lars import LARS
+from avalanche.training.warmup_cosine_scheduler import LinearWarmupCosineAnnealingLR
 
 
 def main(args):
@@ -38,12 +38,12 @@ def main(args):
     loss_fn = BarlowTwinsLoss(scale_loss=0.1)
     # Benchmark
     sequence = [
-    11, 22, 39, 23, 42, 30, 78, 81, 64, 20, 29, 79, 15, 69, 86, 63, 55, 53, 73, 68,
-    89, 67, 58, 97, 96, 92, 37, 14, 75, 51, 54, 7, 3, 6, 50, 40, 45, 4, 83, 98,
-    27, 12, 8, 99, 60, 87, 28, 5, 84, 34, 82, 16, 72, 49, 59, 31, 71, 35, 66, 76,
-    61, 17, 36, 62, 13, 2, 38, 94, 80, 19, 25, 18, 0, 1, 46, 74, 85, 91, 52, 77,
-    21, 33, 32, 88, 93, 70, 44, 47, 26, 57, 90, 95, 48, 65, 43, 10, 9, 56, 24, 41
-]
+        11, 22, 39, 23, 42, 30, 78, 81, 64, 20, 29, 79, 15, 69, 86, 63, 55, 53, 73, 68,
+        89, 67, 58, 97, 96, 92, 37, 14, 75, 51, 54, 7, 3, 6, 50, 40, 45, 4, 83, 98,
+        27, 12, 8, 99, 60, 87, 28, 5, 84, 34, 82, 16, 72, 49, 59, 31, 71, 35, 66, 76,
+        61, 17, 36, 62, 13, 2, 38, 94, 80, 19, 25, 18, 0, 1, 46, 74, 85, 91, 52, 77,
+        21, 33, 32, 88, 93, 70, 44, 47, 26, 57, 90, 95, 48, 65, 43, 10, 9, 56, 24, 41
+        ]
 
     benchmark = SplitCIFAR100(
         n_experiences=5,
@@ -72,34 +72,15 @@ def main(args):
     )
 
     # Optimizer and strategy
-    sgd = torch.optim.SGD(model.parameters(), lr=0.3, weight_decay=1e-4)
     train_mb_size = 256
 
-    n_batches_per_epoch = len(benchmark.train_stream[0].dataset) // train_mb_size
-    warmup_steps = 10 * n_batches_per_epoch
-    overall_steps = args.epochs * n_batches_per_epoch
+    optimizer = LARS(params=model.parameters(), lr=0.3, weight_decay=1e-4, exclude_bias_n_norm=True, clip_lr=True, eta=0.02)
+    scheduler = LinearWarmupCosineAnnealingLR(optimizer=optimizer, warmup_epochs=10, max_epochs=args.epochs, warmup_start_lr=0.003, eta_min=1e-6)
 
-    warmup_scheduler = LinearLR(
-        optimizer=sgd,
-        start_factor=0.01,
-        total_iters=3
-    )
-
-    cosine_scheduler = CosineAnnealingLR(
-        optimizer=sgd,
-        T_max=args.epochs - 3,
-        eta_min=0.0
-    )
-
-    scheduler = SequentialLR(
-        optimizer=sgd,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[3]
-    )
 
     strategy = SelfNaive(
         model=model,
-        optimizer=sgd,
+        optimizer=optimizer,
         criterion=loss_fn,
         train_epochs=args.epochs,
         device=device,
@@ -107,7 +88,10 @@ def main(args):
             LRSchedulerPlugin(
                 scheduler=scheduler,
                 step_granularity="epoch",
+                reset_scheduler=True,
+                reset_lr=True,
             ),
+            CaSSLePlugin(loss=loss_fn, output_dim=2048)
         ],
         train_mb_size=train_mb_size,
         evaluator=eval_plugin,
@@ -117,7 +101,11 @@ def main(args):
     for experience in benchmark.train_stream:
         print("Start training on experience ", experience.current_experience)
         print(f"Classes: {experience.classes_in_this_experience}")
-        # strategy.make_optimizer(reset_optimizer_state=True)
+        strategy.make_optimizer(reset_optimizer_state=True)
+        # have to do this  otherwise the scheduler holds a reference to the optimizer before the reset
+        scheduler.optimizer = strategy.optimizer
+        scheduler.last_epoch = -1
+        scheduler.step()
         strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
         strategy.eval(benchmark.test_stream[:], num_workers=2)
 
@@ -129,10 +117,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ssl_method", type=str, default="simsiam",
+    parser.add_argument("--ssl_method", type=str, default="barlow",
                         help="Self-supervised learning method: simsiam, barlow, or simclr.")
     parser.add_argument("--save_path", type=str, required=True, help="Path to save the trained model weights.")
-    parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs.")
+    parser.add_argument("--epochs", type=int, default=500, help="Number of training epochs.")
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
     parser.add_argument("--feature_dim", type=int, default=512)
