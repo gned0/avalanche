@@ -112,6 +112,7 @@ class BYOL(SelfSupervisedMomentumModel):
 
         # If classifier exists, add logits
         if self.classifier is not None:
-            out["logits"] = self.classifier(f1_online.detach())
+            f = 0.5 * (f1_online.detach() + f2_online.detach())
+            out["logits"] = self.classifier(f)
 
         return out
