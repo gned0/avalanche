@@ -21,8 +21,8 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    print(f"Loading weights from {args.backbone_checkpoint}")
-    checkpoint = torch.load(args.backbone_checkpoint, map_location=device)
+    print(f"Loading weights from {args.weights_path}")
+    checkpoint = torch.load(args.weights_path, map_location=device)
 
     if "state_dict" in checkpoint:
         state_dict = checkpoint["state_dict"]
