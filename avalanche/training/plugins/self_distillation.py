@@ -42,16 +42,17 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
         if not self.predictor_initialized:
             self.distill_predictor = self.distill_predictor.to(strategy.device)
             # Add predictor's parameters to the optimizer
-            extra_params = {"params": self.distill_predictor.parameters()}
+            extra_params = {"params": self.distill_predictor.parameters()} 
             strategy.optimizer.add_param_group(extra_params)
-            self.predictor_initialized = True
+            self.predictor_initialized = True 
+            print("Predictor initialized")
 
     def before_backward(self, strategy, **kwargs):
         raise NotImplementedError("Subclasses must implement the before_backward method.")
 
     def after_training_exp(self, strategy: Template, **kwargs):
-        self.frozen_backbone = deepcopy(strategy.model.backbone)
-        self.frozen_projector = deepcopy(strategy.model.projector)
+        self.frozen_backbone = deepcopy(strategy.model.backbone).to(strategy.device)
+        self.frozen_projector = deepcopy(strategy.model.projector).to(strategy.device)
 
         for pg in self.frozen_backbone.parameters():
             pg.requires_grad = False

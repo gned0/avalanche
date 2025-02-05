@@ -66,7 +66,7 @@ def main(args):
     eval_plugin = EvaluationPlugin(
         loss_metrics(experience=True, stream=True, epoch=True),
         accuracy_metrics(experience=True, stream=True, epoch=True),
-        confusion_matrix_metrics(num_classes=10, save_image=False, stream=True),
+        confusion_matrix_metrics(num_classes=100, save_image=False, stream=True),
         loggers=loggers,
     )
 

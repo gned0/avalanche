@@ -56,7 +56,7 @@ def main(args):
     initial_buffers_backbone = {name: buffer.clone() for name, buffer in model.backbone.model.named_buffers()}
 
     benchmark = SplitCIFAR100(
-        n_experiences=5,
+        n_experiences=1,
         dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         seed=1234,
     )

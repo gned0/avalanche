@@ -23,6 +23,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
             return
 
         additional_term = self.compute_additional_loss(strategy)
+        print(f"SSL Loss: {strategy.loss}, Distillation Loss: {additional_term}") 
         #  no hyperparameter to weigh distillation loss with respect to the SSL loss.
         strategy.loss += additional_term
 

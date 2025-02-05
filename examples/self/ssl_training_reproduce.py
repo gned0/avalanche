@@ -32,7 +32,15 @@ def main(args):
     print(f"Using device: {device}")
 
     backbone = ModelBase(feature_dim=args.feature_dim, arch="resnet18", bn_splits=8)
-    model = BarlowTwins(backbone=backbone, num_classes=100)
+    
+    if args.backbone_checkpoint:
+        print(f"Loading weights from {args.backbone_checkpoint}")
+        checkpoint = torch.load(args.backbone_checkpoint, map_location=device)
+        missing_keys, unexpected_keys = backbone.load_state_dict(checkpoint, strict=False)
+        print(f"Missing keys: {missing_keys}")
+        print(f"Unexpected keys: {unexpected_keys}")
+
+    model = BarlowTwins(backbone=backbone)
 
     transform = BarlowTwinsTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
     loss_fn = BarlowTwinsLoss(scale_loss=0.1)
@@ -66,7 +74,6 @@ def main(args):
 
     eval_plugin = EvaluationPlugin(
         loss_metrics(minibatch=True, epoch=True, experience=True),
-        accuracy_metrics(minibatch=True, epoch=True, experience=True),
         learning_rate_metrics(minibatch=True),
         loggers=loggers,
     )
@@ -98,16 +105,28 @@ def main(args):
     )
 
     # Train
-    for experience in benchmark.train_stream:
+    skip_first_experience = args.backbone_checkpoint is not None
+
+    for i, experience in enumerate(benchmark.train_stream):
+        if skip_first_experience and i == 0:
+            for plugin in strategy.plugins:
+                if hasattr(plugin, "after_training_exp"):
+                    plugin.after_training_exp(strategy)
+            print(f"Skipping first experience ({experience.current_experience}) as backbone checkpoint is provided.")
+            continue  # Skip the first experience
+
         print("Start training on experience ", experience.current_experience)
         print(f"Classes: {experience.classes_in_this_experience}")
+
         strategy.make_optimizer(reset_optimizer_state=True)
-        # have to do this  otherwise the scheduler holds a reference to the optimizer before the reset
+        # Reset scheduler
         scheduler.optimizer = strategy.optimizer
         scheduler.last_epoch = -1
         scheduler.step()
-        strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=2)
+
+        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
+        strategy.eval(benchmark.test_stream[:], num_workers=8)
+
 
     # Save weights
     save_path = args.save_path
@@ -124,6 +143,8 @@ if __name__ == "__main__":
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
     parser.add_argument("--feature_dim", type=int, default=512)
+    parser.add_argument("--backbone_checkpoint", type=str, default=None,
+                        help="Optional: Path to a checkpoint to load backbone weights. If not provided, backbone starts from scratch.")
     parser.add_argument("--tb_path", type=str, default=None,
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     args = parser.parse_args()

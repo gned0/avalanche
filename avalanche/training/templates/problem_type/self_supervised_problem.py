@@ -48,11 +48,14 @@ class SelfSupervisedProblem(
         """Loss function for self-supervised problems."""
         ssl_loss = self._criterion(self.mb_output)
         y = self.mb_y
+        """
         if y is not None:
             cls_loss = F.cross_entropy(self.mb_output["logits"], y)
             return ssl_loss + cls_loss
         else:
             return ssl_loss
+        """
+        return ssl_loss
 
     def forward(self):
         """Compute the model's output given the current mini-batch."""
