@@ -81,8 +81,12 @@ def main(args):
     # Optimizer and strategy
     train_mb_size = 256
 
-    optimizer = LARS(params=model.parameters(), lr=0.3, weight_decay=1e-4, exclude_bias_n_norm=True, clip_lr=True, eta=0.02)
-    scheduler = LinearWarmupCosineAnnealingLR(optimizer=optimizer, warmup_epochs=10, max_epochs=args.epochs, warmup_start_lr=0.003, eta_min=1e-6)
+    optimizer = LARS(
+        params=model.parameters(), lr=0.3, weight_decay=1e-4, exclude_bias_n_norm=True, clip_lr=True, eta=0.02
+    )
+    scheduler = LinearWarmupCosineAnnealingLR(
+        optimizer=optimizer, warmup_epochs=10, max_epochs=args.epochs, warmup_start_lr=0.003, eta_min=1e-6
+    )
 
 
     strategy = SelfNaive(
@@ -104,14 +108,16 @@ def main(args):
         evaluator=eval_plugin,
     )
 
-    # Train
+    # if backbone from task 0 is provided, skip the first experience (saves times)
     skip_first_experience = args.backbone_checkpoint is not None
 
     for i, experience in enumerate(benchmark.train_stream):
+        # if starting from exp. 0 checkpoint, plugin callbacks from exp. 0 still have to be called
         if skip_first_experience and i == 0:
             for plugin in strategy.plugins:
-                if hasattr(plugin, "after_training_exp"):
+                if hasattr(plugin, "after_training_exp") and hasattr(plugin, "before_training"):
                     plugin.after_training_exp(strategy)
+                    plugin.before_training(strategy)
             print(f"Skipping first experience ({experience.current_experience}) as backbone checkpoint is provided.")
             continue  # Skip the first experience
 
@@ -119,13 +125,13 @@ def main(args):
         print(f"Classes: {experience.classes_in_this_experience}")
 
         strategy.make_optimizer(reset_optimizer_state=True)
-        # Reset scheduler
+
         scheduler.optimizer = strategy.optimizer
         scheduler.last_epoch = -1
         scheduler.step()
 
         strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
-        strategy.eval(benchmark.test_stream[:], num_workers=8)
+        # strategy.eval(benchmark.test_stream[:], num_workers=8)
 
 
     # Save weights
