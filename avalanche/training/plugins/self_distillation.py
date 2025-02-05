@@ -41,11 +41,11 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
     def before_training(self, strategy, **kwargs):
         if not self.predictor_initialized:
             self.distill_predictor = self.distill_predictor.to(strategy.device)
+            strategy.model.distill_predictor = self.distill_predictor
             # Add predictor's parameters to the optimizer
             extra_params = {"params": self.distill_predictor.parameters()} 
             strategy.optimizer.add_param_group(extra_params)
-            self.predictor_initialized = True 
-            print("Predictor initialized")
+            self.predictor_initialized = True
 
     def before_backward(self, strategy, **kwargs):
         raise NotImplementedError("Subclasses must implement the before_backward method.")
@@ -58,6 +58,9 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
             pg.requires_grad = False
         for pg in self.frozen_projector.parameters():
             pg.requires_grad = False
+
+        self.frozen_backbone.eval()
+        self.frozen_projector.eval()
 
     @torch.no_grad()
     def frozen_forward(self, x: torch.Tensor):
