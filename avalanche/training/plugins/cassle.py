@@ -1,6 +1,10 @@
+from typing import Any
+
 import torch
 from torch import nn
 import torch.nn.functional as F
+
+from avalanche.core import Template
 from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.training.plugins.self_distillation import SelfDistillationPlugin
 from avalanche.training.self_supervised_losses import BarlowTwinsLoss, ContrastiveDistillLoss
@@ -13,9 +17,14 @@ class CaSSLePlugin(SelfDistillationPlugin):
     This is essentially a distillation approach adapted for self-supervised models.
     """
 
+
     def __init__(self, loss: nn.Module, output_dim: int = 256, hidden_dim: int = 2048):
+        self.counter = 0
+        self.ssl_loss_accum = 0.0
+        self.distillation_loss_accum = 0.0
         super().__init__(
             distillation_loss=loss, output_dim=output_dim, hidden_dim=hidden_dim
+
         )
 
     def before_backward(self, strategy, **kwargs):
@@ -23,8 +32,24 @@ class CaSSLePlugin(SelfDistillationPlugin):
             return
 
         additional_term = self.compute_additional_loss(strategy)
-        print(f"SSL Loss: {strategy.loss}, Distillation Loss: {additional_term}") 
-        #  no hyperparameter to weigh distillation loss with respect to the SSL loss.
+
+        # Accumulate losses
+        self.ssl_loss_accum += strategy.loss
+        self.distillation_loss_accum += additional_term
+        self.counter += 1
+
+        # Check if counter reaches 79
+        if self.counter == 40:
+            avg_ssl_loss = self.ssl_loss_accum / 40
+            avg_distillation_loss = self.distillation_loss_accum / 40
+            print(f"Average SSL Loss: {avg_ssl_loss}, Average Distillation Loss: {avg_distillation_loss}")
+
+            # Reset counter and accumulators
+            self.counter = 0
+            self.ssl_loss_accum = 0.0
+            self.distillation_loss_accum = 0.0
+
+        # Update strategy loss
         strategy.loss += additional_term
 
     def compute_additional_loss(self, strategy):
