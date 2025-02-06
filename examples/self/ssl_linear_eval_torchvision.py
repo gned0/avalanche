@@ -30,7 +30,7 @@ def main(args):
         state_dict = checkpoint
 
     new_state_dict = {}
-    prefix = "encoder."
+    prefix = "model."
     for key, value in state_dict.items():
         if key.startswith(prefix):
             new_key = key[len(prefix):]
@@ -41,19 +41,21 @@ def main(args):
     backbone = ResNet(feature_dim=args.feature_dim, cifar=args.cifar).to(device)
 
     missing_keys, unexpected_keys = backbone.model.load_state_dict(new_state_dict, strict=False)
+    backbone.eval()
     print("Missing keys:", missing_keys)
     print("Unexpected keys:", unexpected_keys)
     print("Backbone model loaded successfully")
 
     backbone_feature_dim = 512 if args.cifar else 2048
     model = ProbeResNet(backbone, backbone_feature_dim=backbone_feature_dim, num_classes=args.num_classes).to(device)
+    model.eval()
 
     print('Linear evaluation model:')
     print(model)
-    initial_params = {name: param.clone() for name, param in model.named_parameters()}
-    initial_buffers = {name: buffer.clone() for name, buffer in model.named_buffers()}
-    initial_params_backbone = {name: param.clone() for name, param in model.backbone.model.named_parameters()}
-    initial_buffers_backbone = {name: buffer.clone() for name, buffer in model.backbone.model.named_buffers()}
+    initial_params = {name: param.clone().cpu() for name, param in model.named_parameters()}
+    initial_buffers = {name: buffer.clone().cpu() for name, buffer in model.named_buffers()}
+    initial_params_backbone = {name: param.clone().cpu() for name, param in model.backbone.model.named_parameters()}
+    initial_buffers_backbone = {name: buffer.clone().cpu() for name, buffer in model.backbone.model.named_buffers()}
 
     benchmark = SplitCIFAR100(
         n_experiences=1,
