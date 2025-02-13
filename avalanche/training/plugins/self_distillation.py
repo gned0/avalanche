@@ -44,7 +44,8 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
             strategy.model.distill_predictor = self.distill_predictor
             # Add predictor's parameters to the optimizer
             extra_params = {"params": self.distill_predictor.parameters()} 
-            strategy.optimizer.add_param_group(extra_params)
+            for param_group in strategy.optimizer.param_groups:
+                param_group["params"].extend(self.distill_predictor.parameters())  
             self.predictor_initialized = True
 
     def before_backward(self, strategy, **kwargs):

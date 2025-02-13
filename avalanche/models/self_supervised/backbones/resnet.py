@@ -17,6 +17,7 @@ class ResNet(nn.Module):
     def __init__(self, feature_dim: int, cifar: bool = False):
         super().__init__()
         self.cifar = cifar
+        self.feature_dim = feature_dim
 
         if cifar:
             self.model = resnet18(num_classes=feature_dim)
@@ -56,12 +57,16 @@ class ProbeResNet(nn.Module):
     def __init__(self, model_base: ResNet, backbone_feature_dim: int, num_classes: int = 100):
         super().__init__()
         self.backbone = model_base
-
         self.backbone.eval()
         for param in self.backbone.parameters():
             param.requires_grad = False
 
         self.linear = nn.Linear(backbone_feature_dim, num_classes)
+
+    def train(self, mode=True):
+        """ Override train() to prevent backbone from switching to train mode. """
+        super().train(mode)
+        self.backbone.eval()  # Always keep backbone in eval mode
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
