@@ -138,7 +138,7 @@ class ReservoirBuffer:
         indices = np.random.choice(available_size, size=size, replace=False)
 
         # Apply the transformation to the sampled inputs1
-        transformed_inputs1 = torch.stack([transform((self.inputs1[i])) for i in indices]).to(self.device)
+        transformed_inputs1 = torch.stack([transform(to_pil_image(self.inputs1[i])) for i in indices]).to(self.device)
 
         # Retrieve inputs2 without transformations
         sampled_inputs2 = self.inputs2[indices]
