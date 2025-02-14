@@ -12,7 +12,7 @@ class BarlowTwinsTransform(ContrastiveTransform):
 
     def __init__(self, mean, std, size):
         super().__init__(mean, std, size)
-        self.transform = transforms.Compose(
+        self.augmentation = transforms.Compose(
             [
                 transforms.RandomResizedCrop(self.size, interpolation=Image.BICUBIC),
                 transforms.RandomHorizontalFlip(p=0.5),
@@ -26,7 +26,7 @@ class BarlowTwinsTransform(ContrastiveTransform):
                 self.normalize,
             ]
         )
-        self.transform_prime = transforms.Compose(
+        self.augmentation_prime = transforms.Compose(
             [
                 transforms.RandomResizedCrop(self.size, interpolation=Image.BICUBIC),
                 transforms.RandomHorizontalFlip(p=0.5),
@@ -42,4 +42,4 @@ class BarlowTwinsTransform(ContrastiveTransform):
         )
 
     def __call__(self, x):
-        return torch.stack([self.transform(x), self.transform_prime(x)], dim=0)
+        return torch.stack([self.to_tensor(x), self.augmentation(x), self.augmentation_prime(x)], dim=0)

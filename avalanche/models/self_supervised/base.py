@@ -30,15 +30,16 @@ class SelfSupervisedModel(nn.Module):
             self.classifier = None
 
     def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
-        x1, x2 = torch.unbind(x, dim=1)
+        x, x1, x2 = torch.unbind(x, dim=1)
         f1 = self.backbone(x1)
         f2 = self.backbone(x2)
 
         out = {"f": [f1, f2]}
 
         if self.classifier is not None:
-            f = 0.5 * (f1.detach() + f2.detach())
-            out["logits"] = self.classifier(f)
+            with torch.no_grad():
+                f = self.backbone(x)
+            out["logits"] = self.classifier(f.detach())
 
         return out
 
