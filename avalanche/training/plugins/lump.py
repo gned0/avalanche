@@ -1,6 +1,8 @@
 import torch
 from typing import Tuple
 from torchvision import transforms
+from torchvision.transforms.functional import to_pil_image
+
 from avalanche.core import SelfSupervisedPlugin
 from avalanche.training import ReservoirSamplingBuffer
 import numpy as np
@@ -19,25 +21,24 @@ class LUMPPlugin(SelfSupervisedPlugin):
 
     def before_training_iteration(self, strategy, **kwargs):
         if self.buffer.is_empty():
-            # first experience, mixup not applied, no need to change
-            # the dataloader.
+            # mixup not applied to first iteration
             return
         else:
             buf_inputs1, buf_inputs2 = self.buffer.get_data(
-                strategy.mb_x.shape[0]
+                strategy.mb_x.shape[0], self.transform.augmentation
             )  # get stored inputs by random sampling from buffer
-            inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
+            inputs, inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
             lam = torch.distributions.Beta(self.alpha, self.alpha).sample().item()
 
             # Perform self-supervised mixup
             mixed_inputs_1 = lam * inputs1 + (1 - lam) * buf_inputs1
             mixed_inputs_2 = lam * inputs2 + (1 - lam) * buf_inputs2
-            mixed_inputs = torch.stack([mixed_inputs_1, mixed_inputs_2], dim=1)
+            mixed_inputs = torch.stack([inputs, mixed_inputs_1, mixed_inputs_2], dim=1)
             strategy.mbatch = (mixed_inputs, *strategy.mbatch[1:])
 
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
-        inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
-        self.buffer.add_data(examples=inputs1, labels=inputs2)
+        inputs, _, inputs2 = torch.unbind(strategy.mb_x, dim=1)
+        self.buffer.add_data(examples=inputs, labels=inputs2)
 
 
 class ReservoirBuffer:
@@ -98,7 +99,6 @@ class ReservoirBuffer:
             self.num_seen_examples += 1  # Increment the counter for seen examples
 
             if index >= 0:
-                # Replace the example at the chosen index
                 self.inputs1[index] = examples[i]
                 self.inputs2[index] = labels[i]
 
@@ -118,7 +118,7 @@ class ReservoirBuffer:
             else:
                 return -1  # Do not store this example
 
-    def get_data(self, size: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def get_data(self, size: int, transform) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Retrieve a random sample of data from the buffer.
 
@@ -128,7 +128,7 @@ class ReservoirBuffer:
         if self.inputs1 is None or self.inputs2 is None or self.num_seen_examples == 0:
             raise ValueError("Buffer is empty or not initialized!")
 
-        # Determine the number of available examples in the buffer
+            # Determine the number of available examples in the buffer
         available_size = min(self.num_seen_examples, self.buffer_size)
 
         # Adjust the requested size if it exceeds the available size
@@ -137,7 +137,13 @@ class ReservoirBuffer:
         # Randomly sample indices from the buffer
         indices = np.random.choice(available_size, size=size, replace=False)
 
-        return self.inputs1[indices], self.inputs2[indices]
+        # Apply the transformation to the sampled inputs1
+        transformed_inputs1 = torch.stack([transform((self.inputs1[i])) for i in indices]).to(self.device)
+
+        # Retrieve inputs2 without transformations
+        sampled_inputs2 = self.inputs2[indices]
+
+        return transformed_inputs1, sampled_inputs2
 
     def is_empty(self) -> bool:
         """
