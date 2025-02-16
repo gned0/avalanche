@@ -10,38 +10,60 @@ from .accuracy import (
     TrainedExperienceAccuracy,
 )
 
-class SSLAccuracyPluginMetric(AccuracyPluginMetric):
+
+class BaseSSLAccuracyMetric:
+    def _validate_logits(self, strategy):
+        assert "logits" in strategy.mb_output, "Logits not found in the model output."
+
+
+class SSLAccuracyPluginMetric(AccuracyPluginMetric, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLAccuracyPerTaskPluginMetric(AccuracyPerTaskPluginMetric):
+
+class SSLAccuracyPerTaskPluginMetric(AccuracyPerTaskPluginMetric, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y, strategy.mb_task_id)
 
-class SSLMinibatchAccuracy(MinibatchAccuracy):
+
+class SSLMinibatchAccuracy(MinibatchAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLEpochAccuracy(EpochAccuracy):
+
+class SSLEpochAccuracy(EpochAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLRunningEpochAccuracy(RunningEpochAccuracy):
+
+class SSLRunningEpochAccuracy(RunningEpochAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLExperienceAccuracy(ExperienceAccuracy):
+
+class SSLExperienceAccuracy(ExperienceAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLStreamAccuracy(StreamAccuracy):
+
+class SSLStreamAccuracy(StreamAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
 
-class SSLTrainedExperienceAccuracy(TrainedExperienceAccuracy):
+
+class SSLTrainedExperienceAccuracy(TrainedExperienceAccuracy, BaseSSLAccuracyMetric):
     def update(self, strategy):
+        self._validate_logits(strategy)
         if strategy.experience.current_experience <= self._current_experience:
             self._metric.update(strategy.mb_output["logits"], strategy.mb_y)
+
 
 def ssl_accuracy_metrics(
     *,
@@ -66,6 +88,7 @@ def ssl_accuracy_metrics(
     if trained_experience:
         metrics.append(SSLTrainedExperienceAccuracy())
     return metrics
+
 
 __all__ = [
     "SSLAccuracyPluginMetric",

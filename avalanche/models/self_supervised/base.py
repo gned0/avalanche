@@ -38,8 +38,8 @@ class SelfSupervisedModel(nn.Module):
 
         if self.classifier is not None:
             with torch.no_grad():
-                f = self.backbone(x)
-            out["logits"] = self.classifier(f.detach())
+                f = self.backbone(x.detach())
+            out["logits"] = self.classifier(f)
 
         return out
 
