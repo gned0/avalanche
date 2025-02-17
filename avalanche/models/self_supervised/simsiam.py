@@ -1,19 +1,19 @@
-import torch.nn
-from torch import nn
+import torch
+import torch.nn as nn
+from typing import Optional, Dict, List
+from avalanche.models.self_supervised.base import SelfSupervisedModel
 
-
-class SimSiam(torch.nn.Module):
+class SimSiam(SelfSupervisedModel):
     def __init__(
         self,
         backbone: nn.Module,
-        projector_in_dim: int = 512,
         proj_hidden_dim: int = 2048,
         proj_output_dim: int = 2048,
         pred_hidden_dim: int = 512,
+        num_classes: Optional[int] = None
     ):
-        super().__init__()
-
-        self.backbone = backbone
+        projector_in_dim = backbone.feature_dim
+        super().__init__(backbone=backbone, num_classes=num_classes)
 
         self.projector = nn.Sequential(
             nn.Linear(projector_in_dim, proj_hidden_dim, bias=False),
@@ -34,13 +34,16 @@ class SimSiam(torch.nn.Module):
             nn.Linear(pred_hidden_dim, proj_output_dim),
         )
 
-    def forward(self, x):
-        x1, x2 = torch.unbind(x, dim=1)
-        f1 = self.backbone(x1)
-        f2 = self.backbone(x2)
+    def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
+        out = super().forward(x)
+        f1, f2 = out["f"]
+
         z1 = self.projector(f1)
         z2 = self.projector(f2)
+
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
 
-        return {"f": [f1, f2], "z": [z1, z2], "p": [p1, p2]}
+        out["z"] = [z1, z2]
+        out["p"] = [p1, p2]
+        return out

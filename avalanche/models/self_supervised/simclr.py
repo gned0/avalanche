@@ -1,31 +1,51 @@
 import torch
 from torch import nn
-import torch.nn.functional as F
+from typing import Optional, Dict, List
+from avalanche.models.self_supervised.base import SelfSupervisedModel
 
-
-class SimCLR(nn.Module):
+class SimCLR(SelfSupervisedModel):
     def __init__(
         self,
         backbone: nn.Module,
-        projector_in_dim: int = 512,
-        proj_hidden_dim: int = 2048,
-        proj_output_dim: int = 256,
+        projector_hidden_dim: int = 2048,
+        projector_output_dim: int = 256,
+        num_classes: Optional[int] = None
     ):
-        super().__init__()
+        """
+        SimCLR model for contrastive self-supervised learning with an optional classifier.
 
-        self.backbone = backbone
+        Args:
+            backbone (nn.Module): The backbone neural network.
+            projector_hidden_dim (int): Hidden dimension size for the projector.
+            projector_output_dim (int): Output dimension size for the projector.
+            num_classes (Optional[int]): Number of classes for classification.
+                                         If provided, a classifier is instantiated.
+        """
+        # Ensure backbone has 'feature_dim' attribute
+        if not hasattr(backbone, 'feature_dim'):
+            raise AttributeError("Backbone must have an attribute `feature_dim` indicating the feature dimension.")
 
+        # Set projector_in_dim based on backbone's feature_dim
+        projector_in_dim = backbone.feature_dim
+
+        super().__init__(backbone=backbone, num_classes=num_classes)
+
+        # Define the projector
         self.projector = nn.Sequential(
-            nn.Linear(projector_in_dim, proj_hidden_dim),
+            nn.Linear(projector_in_dim, projector_hidden_dim),
             nn.ReLU(),
-            nn.Linear(proj_hidden_dim, proj_output_dim),
+            nn.Linear(projector_hidden_dim, projector_output_dim),
         )
 
-    def forward(self, x):
-        x1, x2 = torch.unbind(x, dim=1)
-        f1 = self.backbone(x1)
-        f2 = self.backbone(x2)
-        z1 = self.projector(f1)
-        z2 = self.projector(f2)
+    def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
 
-        return {"z": [z1, z2], "f": [f1, f2]}
+        out = super().forward(x)
+
+        # Apply projector to both features
+        z1 = self.projector(out["f"][0])
+        z2 = self.projector(out["f"][1])
+
+        # Add projections to the output dictionary
+        out["z"] = [z1, z2]
+
+        return out
