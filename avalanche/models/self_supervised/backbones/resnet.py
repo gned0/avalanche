@@ -5,12 +5,12 @@ from torchvision.models import resnet18, resnet50
 
 class ResNet(nn.Module):
     """
-    Base model with a ResNet backbone.
+    ResNet model with a CIFAR variant for smaller inputs.
 
     Args:
         feature_dim (int): The dimension used for the classification head. This is
                            passed to the model's `num_classes` parameter.
-        cifar (bool): If True, a ResNet-18 is created and modified for CIFAR.
+        cifar (bool): If True, a ResNet-18 is created and modified for CIFAR or other smaller inputs.
                       Otherwise, a ResNet-50 is instantiated.
     """
 
@@ -43,7 +43,7 @@ class ProbeResNet(nn.Module):
     """
     Linear probe model on top of a frozen backbone.
 
-    This module wraps a ModelBase instance (the backbone), freezes its parameters,
+    This module wraps a ResNet instance (the backbone), freezes its parameters,
     and attaches a trainable linear classifier (probe) on top.
 
     Args:
