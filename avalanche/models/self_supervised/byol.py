@@ -4,7 +4,13 @@ from typing import Optional, Dict, List
 
 from avalanche.models.self_supervised.base import SelfSupervisedMomentumModel
 
-
+"""
+This module implements the BYOL (Bootstrap Your Own Latent) self-supervised learning model, 
+introduced in https://arxiv.org/pdf/2006.07733, based on the SelfSupervisedMomentumModel class. 
+BYOL employs an online projector, an online predictor, and a target projector. The
+target projector is updated via an exponential moving average (EMA) of the online projector's
+parameters.
+"""
 class BYOL(SelfSupervisedMomentumModel):
     def __init__(
         self,
@@ -14,9 +20,22 @@ class BYOL(SelfSupervisedMomentumModel):
         num_classes: Optional[int] = None,
         momentum: float = 0.999,
     ):
+        """
+        Implementation of the BYOL self-supervised learning model.
+
+        Args:
+            backbone (nn.Module): The feature extractor network. Must have a `feature_dim` attribute.
+            hidden_dim (int): Dimensionality of the hidden layers in the projector. Default is 4096.
+            out_dim (int): Dimensionality of the output layer of the projector. Default is 256.
+            num_classes (Optional[int]): If provided, an additional online classifier is instantiated.
+            momentum (float): Momentum for the target network update. Default is 0.999.
+        """
+        if not hasattr(backbone, 'feature_dim'):
+            raise AttributeError("Backbone must have an attribute `feature_dim` indicating the feature dimension.")
+
         super().__init__(backbone, num_classes=num_classes, momentum=momentum)
         self.feature_dim = backbone.feature_dim
-        # Online Projector
+
         self.online_projector = nn.Sequential(
             nn.Linear(self.feature_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
@@ -24,7 +43,6 @@ class BYOL(SelfSupervisedMomentumModel):
             nn.Linear(hidden_dim, out_dim),
         )
 
-        # Online Predictor
         self.online_predictor = nn.Sequential(
             nn.Linear(out_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
@@ -32,7 +50,6 @@ class BYOL(SelfSupervisedMomentumModel):
             nn.Linear(hidden_dim, out_dim),
         )
 
-        # Target Projector
         self.target_projector = nn.Sequential(
             nn.Linear(self.feature_dim, hidden_dim),
             nn.BatchNorm1d(hidden_dim),
@@ -75,21 +92,27 @@ class BYOL(SelfSupervisedMomentumModel):
         """
         Forward pass for BYOL.
 
+        This method performs the following steps:
+            1. Uses the base momentum model to extract online and target features from the input.
+            2. Processes the online features through the online projector and predictor.
+            3. Processes the target features through the target projector (without gradient computation).
+            4. Returns a dictionary containing predictions from the online network ("p")
+               and target projections ("z").
+
         Args:
-            x (torch.Tensor): Input batch with shape (B, 2, C, H, W).
+            x (torch.Tensor): Input tensor expected to contain multiple augmented views.
+                              The base model handles splitting these into online and target features.
 
         Returns:
-            Dict[str, List[torch.Tensor]]: {
-                "p": [p1, p2],          # Predictions from the online network
-                "z": [z1_target, z2_target],  # Projections from the target network (no grad)
-                "logits": logits (optional)   # Classifier logits if enabled
-            }
+            Dict[str, List[torch.Tensor]]: A dictionary with:
+                - "p": List of predictions from the online network for each view.
+                - "z": List of target projections (detached) for each view.
         """
-        (x1, x2) = torch.unbind(x, dim=1)
 
-        # online network
-        f1_online = self.backbone(x1)
-        f2_online = self.backbone(x2)
+        out = super().forward(x)
+
+        f1_online, f2_online = out["f_online"]
+        f1_target, f2_target = out["f_target"]
 
         z1_online = self.online_projector(f1_online)
         z2_online = self.online_projector(f2_online)
@@ -97,22 +120,11 @@ class BYOL(SelfSupervisedMomentumModel):
         p1_online = self.online_predictor(z1_online)
         p2_online = self.online_predictor(z2_online)
 
-        # target network
         with torch.no_grad():
-            f1_target = self.target_backbone(x1)
-            f2_target = self.target_backbone(x2)
-
             z1_target = self.target_projector(f1_target)
             z2_target = self.target_projector(f2_target)
 
-        out = {
-            "p": [p1_online, p2_online],
-            "z": [z1_target.detach(), z2_target.detach()],
-        }
-
-        # If classifier exists, add logits
-        if self.classifier is not None:
-            f = 0.5 * (f1_online.detach() + f2_online.detach())
-            out["logits"] = self.classifier(f)
+        out["p"] = [p1_online, p2_online]
+        out["z"] = [z1_target.detach(), z2_target.detach()]
 
         return out
