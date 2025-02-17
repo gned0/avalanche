@@ -1,7 +1,3 @@
-# Copied from Pytorch Lightning Bolts
-# https://github.com/Lightning-Universe/lightning-bolts/blob/master/src/pl_bolts/optimizers/lr_scheduler.py
-# To avoid a dependency
-
 import math
 import warnings
 from typing import List
@@ -9,6 +5,10 @@ from typing import List
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
+"""
+Cosine annealing scheduler with linear warmup. Implementation from the Lightning Bolts library
+https://github.com/Lightning-Universe/lightning-bolts/blob/master/src/pl_bolts/optimizers/lr_scheduler.py.
+"""
 
 class LinearWarmupCosineAnnealingLR(_LRScheduler):
     """Sets the learning rate of each parameter group to follow a linear warmup schedule

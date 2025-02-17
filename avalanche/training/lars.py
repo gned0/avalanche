@@ -1,8 +1,12 @@
-# (https://github.com/PyTorchLightning/lightning-bolts/blob/master/pl_bolts/optimizers/lars.py)
-
 import torch
 from torch.optim.optimizer import Optimizer, required
 
+
+"""
+Implementation of the LARS optimizer (https://arxiv.org/pdf/1708.03888.pdf), 
+taken from the Lightning Bolts library 
+https://github.com/Lightning-Universe/lightning-bolts/blob/master/src/pl_bolts/optimizers/lars.py.
+"""
 
 class LARS(Optimizer):
     """Extends SGD in PyTorch with LARS scaling from the paper
