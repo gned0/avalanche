@@ -45,7 +45,8 @@ class SelfSupervisedProblem(
         return mbatch[-1]
 
     def criterion(self):
-        """Loss function for self-supervised problems."""
+        """Loss function for self-supervised problems. If labels are present and the classifier
+        was instantiated, the online classification loss is computed and added to the total loss."""
         ssl_loss = self._criterion(self.mb_output)
         y = self.mb_y
         if y is not None and "logits" in self.mb_output:
@@ -64,7 +65,6 @@ class SelfSupervisedProblem(
             return self.model(self.mb_x)
 
     def _unpack_minibatch(self):
-        """Check if the current mini-batch has 2 components."""
         mbatch = self.mbatch
         assert mbatch is not None
 
