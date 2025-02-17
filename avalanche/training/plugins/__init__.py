@@ -26,3 +26,7 @@ from .rar import RARPlugin
 from .update_ncm import *
 from .update_fecam import *
 from .feature_distillation import *
+from .momentum_update import MomentumUpdatePlugin
+from .cassle import CaSSLePlugin
+from .pfr import PFRPlugin
+from .lump import LUMPPlugin
