@@ -1,3 +1,4 @@
+import torch
 from torchvision import transforms
 
 from avalanche.benchmarks.utils.self_supervised.base_transform import (
@@ -10,7 +11,7 @@ class SimCLRTransform(ContrastiveTransform):
 
     def __init__(self, mean, std, size):
         super().__init__(mean, std, size)
-        augmentation = transforms.Compose(
+        self.augmentation = transforms.Compose(
             [
                 transforms.RandomResizedCrop(self.size, scale=(0.2, 1.0)),
                 transforms.RandomApply(
@@ -23,7 +24,8 @@ class SimCLRTransform(ContrastiveTransform):
                 self.normalize,
             ]
         )
-        self.transform = self.TwoCropsTransform(augmentation)
 
     def __call__(self, x):
-        return self.transform(x)
+        return torch.stack([self.normalize(self.to_tensor(x)),
+                            self.augmentation(x),
+                            self.augmentation(x)], dim=0)

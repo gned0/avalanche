@@ -7,8 +7,9 @@ from avalanche.benchmarks.utils.self_supervised.base_transform import (
 )
 
 
-class BarlowTwinsTransform(ContrastiveTransform):
-    """Barlow Twins-specific data augmentation pipeline."""
+class AsymmetricTransform(ContrastiveTransform):
+    """Asymmetric data augmentation pipeline used in the original version of
+    Barlow Twins and BYOL."""
 
     def __init__(self, mean, std, size):
         super().__init__(mean, std, size)
@@ -42,4 +43,6 @@ class BarlowTwinsTransform(ContrastiveTransform):
         )
 
     def __call__(self, x):
-        return torch.stack([self.to_tensor(x), self.augmentation(x), self.augmentation_prime(x)], dim=0)
+        return torch.stack([self.normalize(self.to_tensor(x)),
+                            self.augmentation(x),
+                            self.augmentation_prime(x)], dim=0)
