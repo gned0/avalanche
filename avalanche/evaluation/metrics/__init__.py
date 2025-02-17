@@ -20,3 +20,4 @@ from .topk_acc import *
 from .acc_matrix import *
 from .cumulative_accuracies import *
 from .learning_rate import *
+from .ssl_accuracy import *

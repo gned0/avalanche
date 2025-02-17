@@ -19,6 +19,7 @@ class ContrastiveTransform:
         self.std = std
         self.size = size
         self.normalize = transforms.Normalize(mean=self.mean, std=self.std)
+        self.to_tensor = transforms.ToTensor()
 
     class GaussianBlur:
         """Gaussian blur augmentation."""

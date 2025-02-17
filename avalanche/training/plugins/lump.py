@@ -1,6 +1,8 @@
 import torch
 from typing import Tuple
 from torchvision import transforms
+from torchvision.transforms.functional import to_pil_image
+
 from avalanche.core import SelfSupervisedPlugin
 from avalanche.training import ReservoirSamplingBuffer
 import numpy as np
@@ -8,175 +10,144 @@ import numpy as np
 
 class LUMPPlugin(SelfSupervisedPlugin):
     """
-    Plugin implementation of the Lifelong Unsupervised Mixup (LUMP) approach,
-    introduced in https://arxiv.org/abs/2110.06976.
-    This approach aims at enhancing the robustness of learned representation
-    in self-supervised scenarios by revisiting the attributes of the past task
-    that are similar to the current one (?).
+
     """
 
-    def __init__(self, alpha: float, buffer_size: int, device: torch.device, transform):
+    def __init__(self, buffer_size: int, device: torch.device, transform, alpha: float = 0.1,):
         super().__init__()
         self.alpha = alpha
-        self.buffer = Buffer(buffer_size, device)
+        self.buffer = ReservoirBuffer(buffer_size, device)
         self.transform = transform
 
     def before_training_iteration(self, strategy, **kwargs):
         if self.buffer.is_empty():
-            # first experience, mixup not applied, no need to change
-            # the dataloader.
+            # mixup not applied to first iteration
             return
         else:
             buf_inputs1, buf_inputs2 = self.buffer.get_data(
-                strategy.mb_x.shape[0]
+                strategy.mb_x.shape[0], self.transform.augmentation
             )  # get stored inputs by random sampling from buffer
-            inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
+            inputs, inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
             lam = torch.distributions.Beta(self.alpha, self.alpha).sample().item()
 
-            # Perform mixup
+            # Perform self-supervised mixup
             mixed_inputs_1 = lam * inputs1 + (1 - lam) * buf_inputs1
             mixed_inputs_2 = lam * inputs2 + (1 - lam) * buf_inputs2
-            mixed_inputs = torch.stack([mixed_inputs_1, mixed_inputs_2], dim=1)
+            mixed_inputs = torch.stack([inputs, mixed_inputs_1, mixed_inputs_2], dim=1)
             strategy.mbatch = (mixed_inputs, *strategy.mbatch[1:])
 
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
-        inputs1, inputs2 = torch.unbind(strategy.mb_x, dim=1)
-        self.buffer.add_data(examples=inputs1, labels=inputs2)
+        inputs, _, inputs2 = torch.unbind(strategy.mb_x, dim=1)
+        self.buffer.add_data(examples=inputs, labels=inputs2)
 
 
-def reservoir(num_seen_examples: int, buffer_size: int) -> int:
+class ReservoirBuffer:
     """
-    Reservoir sampling algorithm.
-    :param num_seen_examples: the number of seen examples
-    :param buffer_size: the maximum buffer size
-    :return: the target index if the current image is sampled, else -1
-    """
-    if num_seen_examples < buffer_size:
-        return num_seen_examples
-
-    rand = np.random.randint(0, num_seen_examples + 1)
-    if rand < buffer_size:
-        return rand
-    else:
-        return -1
-
-
-class Buffer:
-    """
-    The memory buffer of rehearsal method.
+    A reservoir sampling buffer for self-supervised learning (SSL) tasks.
+    Stores pairs of inputs (inputs1, inputs2) for SSL tasks.
     """
 
-    def __init__(self, buffer_size, device, mode="reservoir"):
-        assert mode in ["ring", "reservoir"]
+    def __init__(self, buffer_size: int, device: torch.device):
+        """
+        Initialize the reservoir buffer.
+
+        :param buffer_size: Maximum size of the buffer.
+        :param device: Device on which the buffer tensors are stored.
+        """
         self.buffer_size = buffer_size
         self.device = device
-        self.num_seen_examples = 0
-        self.functional_index = eval(mode)
-        self.attributes = ["examples", "labels"]
+        self.num_seen_examples = 0  # Tracks the number of examples seen so far
 
-    def init_tensors(self, examples: torch.Tensor, labels: torch.Tensor) -> None:
-        """
-        Initializes just the required tensors.
-        :param examples: tensor containing the images
-        :param labels: tensor containing the labels
-        :param logits: tensor containing the outputs of the network
-        :param task_labels: tensor containing the task labels
-        """
-        for attr_str in self.attributes:
-            attr = eval(attr_str)
-            if attr is not None and not hasattr(self, attr_str):
-                typ = torch.int64 if attr_str.endswith("els") else torch.float32
-                setattr(
-                    self,
-                    attr_str,
-                    torch.zeros(
-                        (self.buffer_size, *attr.shape[1:]),
-                        dtype=typ,
-                        device=self.device,
-                    ),
-                )
+        # Initialize buffer tensors (None initially, will be initialized on the first call to add_data)
+        self.inputs1 = None
+        self.inputs2 = None
 
-    def add_data(self, examples, labels):
+    def _init_tensors(self, examples: torch.Tensor, labels: torch.Tensor):
         """
-        Adds the data to the memory buffer according to the reservoir strategy.
-        :param examples: tensor containing the images
-        :param labels: tensor containing the labels
-        :param logits: tensor containing the outputs of the network
-        :param task_labels: tensor containing the task labels
-        :return:
-        """
-        if not hasattr(self, "examples"):
-            self.init_tensors(examples, labels)
+        Initialize the buffer tensors with the same shape as the input tensors.
 
-        for i in range(examples.shape[0]):
-            index = reservoir(self.num_seen_examples, self.buffer_size)
-            self.num_seen_examples += 1
+        :param examples: Tensor representing inputs1 (shape: [batch_size, ...]).
+        :param labels: Tensor representing inputs2 (shape: [batch_size, ...]).
+        """
+        self.inputs1 = torch.zeros(
+            (self.buffer_size, *examples.shape[1:]),
+            dtype=examples.dtype,
+            device=self.device,
+        )
+        self.inputs2 = torch.zeros(
+            (self.buffer_size, *labels.shape[1:]),
+            dtype=labels.dtype,
+            device=self.device,
+        )
+
+    def add_data(self, examples: torch.Tensor, labels: torch.Tensor):
+        """
+        Add new data to the reservoir buffer using reservoir sampling.
+
+        :param examples: Tensor representing inputs1.
+        :param labels: Tensor representing inputs2.
+        """
+        if self.inputs1 is None or self.inputs2 is None:
+            # Initialize buffer tensors on the first call
+            self._init_tensors(examples, labels)
+
+        batch_size = examples.shape[0]
+
+        for i in range(batch_size):
+            # Determine the index to store this example in the buffer
+            index = self._reservoir_sampling_index(self.num_seen_examples)
+            self.num_seen_examples += 1  # Increment the counter for seen examples
+
             if index >= 0:
-                self.examples[index] = examples[i].to(self.device)
-                self.labels[index] = labels[i].to(self.device)
+                self.inputs1[index] = examples[i]
+                self.inputs2[index] = labels[i]
 
-    def get_data(self, size: int, transform: transforms = None) -> Tuple:
+    def _reservoir_sampling_index(self, num_seen_examples: int) -> int:
         """
-        Random samples a batch of size items.
-        :param size: the number of requested items
-        :param transform: the transformation to be applied (data augmentation)
-        :return:
+        Reservoir sampling algorithm to determine the index for a new example.
+
+        :param num_seen_examples: Number of examples seen so far.
+        :return: The index in the buffer where the example should be stored, or -1 if not stored.
         """
-        if size > min(self.num_seen_examples, self.examples.shape[0]):
-            size = min(self.num_seen_examples, self.examples.shape[0])
+        if num_seen_examples < self.buffer_size:
+            return num_seen_examples  # Fill the buffer initially
+        else:
+            rand = np.random.randint(0, num_seen_examples + 1)
+            if rand < self.buffer_size:
+                return rand  # Replace an existing example
+            else:
+                return -1  # Do not store this example
 
-        choice = np.random.choice(
-            min(self.num_seen_examples, self.examples.shape[0]),
-            size=size,
-            replace=False,
-        )
-        if transform is None:
-            transform = lambda x: x
-        # import pdb
-        # pdb.set_trace()
-        ret_tuple = (
-            torch.stack([transform(ee.cpu()) for ee in self.examples[choice]]).to(
-                self.device
-            ),
-        )
-        for attr_str in self.attributes[1:]:
-            if hasattr(self, attr_str):
-                attr = getattr(self, attr_str)
-                ret_tuple += (attr[choice],)
+    def get_data(self, size: int, transform) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Retrieve a random sample of data from the buffer.
 
-        return ret_tuple
+        :param size: Number of items to retrieve.
+        :return: A tuple (inputs1, inputs2) of the sampled data.
+        """
+        if self.inputs1 is None or self.inputs2 is None or self.num_seen_examples == 0:
+            raise ValueError("Buffer is empty or not initialized!")
+
+            # Determine the number of available examples in the buffer
+        available_size = min(self.num_seen_examples, self.buffer_size)
+
+        # Adjust the requested size if it exceeds the available size
+        size = min(size, available_size)
+
+        # Randomly sample indices from the buffer
+        indices = np.random.choice(available_size, size=size, replace=False)
+
+        # Apply the transformation to the sampled inputs1
+        transformed_inputs1 = torch.stack([transform(to_pil_image(self.inputs1[i])) for i in indices]).to(self.device)
+
+        # Retrieve inputs2 without transformations
+        sampled_inputs2 = self.inputs2[indices]
+
+        return transformed_inputs1, sampled_inputs2
 
     def is_empty(self) -> bool:
         """
-        Returns true if the buffer is empty, false otherwise.
+        Check if the buffer is empty.
         """
-        if self.num_seen_examples == 0:
-            return True
-        else:
-            return False
+        return self.num_seen_examples == 0
 
-    def get_all_data(self, transform: transforms = None) -> Tuple:
-        """
-        Return all the items in the memory buffer.
-        :param transform: the transformation to be applied (data augmentation)
-        :return: a tuple with all the items in the memory buffer
-        """
-        if transform is None:
-            transform = lambda x: x
-        ret_tuple = (
-            torch.stack([transform(ee.cpu()) for ee in self.examples]).to(self.device),
-        )
-        for attr_str in self.attributes[1:]:
-            if hasattr(self, attr_str):
-                attr = getattr(self, attr_str)
-                ret_tuple += (attr,)
-        return ret_tuple
-
-    def empty(self) -> None:
-        """
-        Set all the tensors to None.
-        """
-        for attr_str in self.attributes:
-            if hasattr(self, attr_str):
-                delattr(self, attr_str)
-        self.num_seen_examples = 0
