@@ -3,6 +3,12 @@ import torch.nn as nn
 from typing import Optional, Dict, List
 from avalanche.models.self_supervised.base import SelfSupervisedModel
 
+"""
+This module implements the SimSiam self-supervised learning model, introduced in https://arxiv.org/pdf/2011.10566.
+SimSiam uses a backbone network to extract features from augmented inputs and employs a projector and predictor network 
+to learn meaningful representations without requiring negative samples.
+"""
+
 class SimSiam(SelfSupervisedModel):
     def __init__(
         self,
@@ -12,6 +18,19 @@ class SimSiam(SelfSupervisedModel):
         pred_hidden_dim: int = 512,
         num_classes: Optional[int] = None
     ):
+        """
+        Implementation of the SimSiam self-supervised learning model.
+
+        Args:
+            backbone (nn.Module): The feature extractor network. Must have a `feature_dim` attribute.
+            proj_hidden_dim (int): Dimensionality of the hidden layers in the projector. Default is 2048.
+            proj_output_dim (int): Dimensionality of the output layer of the projector. Default is 2048.
+            pred_hidden_dim (int): Dimensionality of the hidden layer in the predictor. Default is 512.
+            num_classes (Optional[int]): If provided, an additional online classifier is instantiated.
+        """
+        if not hasattr(backbone, 'feature_dim'):
+            raise AttributeError("Backbone must have an attribute `feature_dim` indicating the feature dimension.")
+
         projector_in_dim = backbone.feature_dim
         super().__init__(backbone=backbone, num_classes=num_classes)
 
@@ -35,6 +54,19 @@ class SimSiam(SelfSupervisedModel):
         )
 
     def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
+        """
+        Forward pass through the SimSiam model.
+
+        Args:
+            x (torch.Tensor): Input tensor expected to have two views. The superclass
+                              method unpacks this into at least two augmented views.
+
+        Returns:
+            Dict[str, List[torch.Tensor]]: A dictionary containing:
+                - "f": List of feature tensors extracted by the backbone.
+                - "z": List of projected tensors after applying the projector.
+                - "p": List of prediction tensors after applying the predictor.
+        """
         out = super().forward(x)
         f1, f2 = out["f"]
 
