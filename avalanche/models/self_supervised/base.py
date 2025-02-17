@@ -3,7 +3,14 @@ import torch
 from torch import nn
 from typing import Optional, Dict, List
 
-
+"""
+This module defines base classes for self-supervised learning (SSL) models.
+It includes:
+  - `SelfSupervisedModel`: A base SSL model.
+  - `SelfSupervisedMomentumModel`: An SSL model with both an online and a momentum-updated target network,
+    inspired by methods such as MoCo and BYOL.
+Both classes include an optional online classifier that may be used if labels are provided in the dataset.
+"""
 class SelfSupervisedModel(nn.Module):
     def __init__(
             self,
@@ -11,7 +18,7 @@ class SelfSupervisedModel(nn.Module):
             num_classes: Optional[int] = None
     ):
         """
-        Base class for self-supervised models with an optional classifier.
+        Base class for self-supervised models with an optional online classifier.
 
         Args:
             backbone (nn.Module): The backbone neural network to extract features.
@@ -21,7 +28,6 @@ class SelfSupervisedModel(nn.Module):
         super(SelfSupervisedModel, self).__init__()
         self.backbone = backbone
 
-        # Initialize classifier only if num_classes is provided
         if num_classes is not None:
             if not hasattr(backbone, 'feature_dim'):
                 raise AttributeError("Backbone must have an attribute `feature_dim` indicating the feature dimension.")
@@ -46,7 +52,7 @@ class SelfSupervisedModel(nn.Module):
 class SelfSupervisedMomentumModel(nn.Module):
     """
     A base class to handle an online and a target network
-    with a momentum update for the target. Includes an optional classifier.
+    with a momentum update for the target (like MoCo and BYOL). Includes an optional classifier.
     """
     def __init__(
         self,
@@ -84,6 +90,24 @@ class SelfSupervisedMomentumModel(nn.Module):
             self.backbone.parameters(), self.target_backbone.parameters()
         ):
             param_t.data = param_t.data * self.momentum + param_o.data * (1.0 - self.momentum)
+
+    def forward(self, x: torch.Tensor) -> Dict[str, List[torch.Tensor]]:
+        x, x1, x2 = torch.unbind(x, dim=1)
+
+        f_online1 = self.backbone(x1)
+        f_online2 = self.backbone(x2)
+        with torch.no_grad():
+            f_target1 = self.target_backbone(x1)
+            f_target2 = self.target_backbone(x2)
+
+        out = {"f_online": [f_online1, f_online2], "f_target": [f_target1, f_target2]}
+
+        if self.classifier is not None:
+            with torch.no_grad():
+                f = self.backbone(x.detach())
+            out["logits"] = self.classifier(f)
+
+        return out
 
 
 
