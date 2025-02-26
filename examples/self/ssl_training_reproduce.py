@@ -6,21 +6,24 @@ from os.path import abspath, dirname
 
 
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-from avalanche.models.self_supervised import BarlowTwins
+from avalanche.benchmarks.utils.self_supervised.transformations import AsymmetricTransformation, SimSiamTransformation, \
+    CIFARTransformation, SimCLRTransformation
+from avalanche.models.self_supervised.backbones.resnet import ResNet
+from avalanche.models.self_supervised import BarlowTwins, SimSiam
 from avalanche.training.plugins.cassle import CaSSLePlugin
 from avalanche.training.plugins.momentum_update import MomentumUpdatePlugin
 from avalanche.benchmarks.utils.self_supervised.cifar_transform import CIFARTransform
 from avalanche.models.self_supervised.byol import BYOL
 from avalanche.evaluation.metrics.learning_rate import learning_rate_metrics
 from avalanche.benchmarks import SplitCIFAR100, SplitCIFAR10
-from avalanche.benchmarks.utils.self_supervised.barlow_transform import BarlowTwinsTransform
 from avalanche.benchmarks.utils.self_supervised.simclr_transform import SimCLRTransform
 from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.models.self_supervised.backbones.cifar_resnet18 import ModelBase
 from avalanche.training.self_supervised.strategy_wrappers import SelfNaive
-from avalanche.training.plugins import LRSchedulerPlugin, ReplayPlugin
-from avalanche.training.self_supervised_losses import NTXentLoss, BarlowTwinsLoss, BYOLLoss
-from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics
+from avalanche.training.plugins import LRSchedulerPlugin, ReplayPlugin, PFRPlugin
+from avalanche.training.self_supervised_losses import NTXentLoss, BarlowTwinsLoss, BYOLLoss, SimSiamLoss, \
+    ContrastiveDistillLoss
+from avalanche.evaluation.metrics import loss_metrics, accuracy_metrics, ssl_accuracy_metrics
 from avalanche.logging import InteractiveLogger, TextLogger, TensorboardLogger
 from avalanche.training.plugins import EvaluationPlugin
 from avalanche.training.lars import LARS
@@ -31,8 +34,8 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    backbone = ModelBase(feature_dim=args.feature_dim, arch="resnet18", bn_splits=8)
-    
+    backbone = ResNet(feature_dim=args.feature_dim, cifar=True)
+
     if args.backbone_checkpoint:
         print(f"Loading weights from {args.backbone_checkpoint}")
         checkpoint = torch.load(args.backbone_checkpoint, map_location=device)
@@ -40,10 +43,10 @@ def main(args):
         print(f"Missing keys: {missing_keys}")
         print(f"Unexpected keys: {unexpected_keys}")
 
-    model = BarlowTwins(backbone=backbone)
+    model = SimCLR(backbone=backbone)
 
-    transform = BarlowTwinsTransform((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
-    loss_fn = BarlowTwinsLoss(scale_loss=0.1)
+    transform = SimCLRTransformation((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+    loss_fn = NTXentLoss(temperature=0.2)
     # Benchmark
     sequence = [
         11, 22, 39, 23, 42, 30, 78, 81, 64, 20, 29, 79, 15, 69, 86, 63, 55, 53, 73, 68,
@@ -82,7 +85,7 @@ def main(args):
     train_mb_size = 256
 
     optimizer = LARS(
-        params=model.parameters(), lr=0.3, weight_decay=1e-4, exclude_bias_n_norm=True, clip_lr=True, eta=0.02
+        params=model.parameters(), lr=0.4, weight_decay=1e-5, exclude_bias_n_norm=True, clip_lr=True, eta=0.02
     )
     scheduler = LinearWarmupCosineAnnealingLR(
         optimizer=optimizer, warmup_epochs=10, max_epochs=args.epochs, warmup_start_lr=0.003, eta_min=1e-6
@@ -102,7 +105,6 @@ def main(args):
                 reset_scheduler=True,
                 reset_lr=True,
             ),
-            CaSSLePlugin(loss=loss_fn, output_dim=2048)
         ],
         train_mb_size=train_mb_size,
         evaluator=eval_plugin,
@@ -130,7 +132,7 @@ def main(args):
         scheduler.last_epoch = -1
         scheduler.step()
 
-        strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
+        strategy.train(experience, num_workers=2, persistent_workers=True, drop_last=True)
         # strategy.eval(benchmark.test_stream[:], num_workers=8)
 
 
