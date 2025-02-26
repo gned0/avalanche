@@ -5,6 +5,7 @@ import torch
 from torch import nn
 
 from avalanche.core import SelfSupervisedPlugin, Template
+from avalanche.models.self_supervised import SelfSupervisedModel, SelfSupervisedMomentumModel
 
 
 class SelfDistillationPlugin(SelfSupervisedPlugin):
@@ -53,7 +54,12 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
 
     def after_training_exp(self, strategy: Template, **kwargs):
         self.frozen_backbone = deepcopy(strategy.model.backbone).to(strategy.device)
-        self.frozen_projector = deepcopy(strategy.model.projector).to(strategy.device)
+        if isinstance(strategy.model, SelfSupervisedModel):
+            self.frozen_projector = deepcopy(strategy.model.projector).to(strategy.device)
+        elif isinstance(strategy.model, SelfSupervisedMomentumModel):
+            self.frozen_projector = deepcopy(strategy.model.online_projector).to(strategy.device)
+        else:
+            raise ValueError("Unsupported model type. Only models with a projector are supported.")
 
         for pg in self.frozen_backbone.parameters():
             pg.requires_grad = False
@@ -65,7 +71,7 @@ class SelfDistillationPlugin(SelfSupervisedPlugin):
 
     @torch.no_grad()
     def frozen_forward(self, x: torch.Tensor):
-        x1, x2 = torch.unbind(x, dim=1)
+        _, x1, x2 = torch.unbind(x, dim=1)
         f1_frozen = self.frozen_backbone(x1)
         f2_frozen = self.frozen_backbone(x2)
         z1_frozen = self.frozen_projector(f1_frozen)
