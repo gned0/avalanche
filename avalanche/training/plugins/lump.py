@@ -38,7 +38,7 @@ class LUMPPlugin(SelfSupervisedPlugin):
 
     def after_training_iteration(self, strategy: "SelfSupervisedTemplate", **kwargs):
         inputs, _, inputs2 = torch.unbind(strategy.mb_x, dim=1)
-        self.buffer.add_data(examples=inputs, labels=inputs2)
+        self.buffer.add_data(inputs1=inputs, inputs2=inputs2)
 
 
 class ReservoirBuffer:
@@ -57,50 +57,48 @@ class ReservoirBuffer:
         self.buffer_size = buffer_size
         self.device = device
         self.num_seen_examples = 0  # Tracks the number of examples seen so far
-
-        # Initialize buffer tensors (None initially, will be initialized on the first call to add_data)
         self.inputs1 = None
         self.inputs2 = None
 
-    def _init_tensors(self, examples: torch.Tensor, labels: torch.Tensor):
+    def _init_tensors(self, inputs1: torch.Tensor, inputs2: torch.Tensor):
         """
         Initialize the buffer tensors with the same shape as the input tensors.
 
-        :param examples: Tensor representing inputs1 (shape: [batch_size, ...]).
-        :param labels: Tensor representing inputs2 (shape: [batch_size, ...]).
+        :param inputs1: Tensor representing inputs1 (shape: [batch_size, ...]).
+        :param inputs2: Tensor representing inputs2 (pseudo-labels, shape: [batch_size, ...]).
         """
         self.inputs1 = torch.zeros(
-            (self.buffer_size, *examples.shape[1:]),
-            dtype=examples.dtype,
+            (self.buffer_size, *inputs1.shape[1:]),
+            dtype=inputs1.dtype,
             device=self.device,
         )
         self.inputs2 = torch.zeros(
-            (self.buffer_size, *labels.shape[1:]),
-            dtype=labels.dtype,
+            (self.buffer_size, *inputs2.shape[1:]),
+            dtype=inputs2.dtype,
             device=self.device,
         )
 
-    def add_data(self, examples: torch.Tensor, labels: torch.Tensor):
+    def add_data(self, inputs1: torch.Tensor, inputs2: torch.Tensor):
         """
         Add new data to the reservoir buffer using reservoir sampling.
 
-        :param examples: Tensor representing inputs1.
-        :param labels: Tensor representing inputs2.
+        :param inputs1: Tensor representing inputs1.
+        :param inputs2: Tensor representing inputs2 (pseudo-labels).
         """
         if self.inputs1 is None or self.inputs2 is None:
             # Initialize buffer tensors on the first call
-            self._init_tensors(examples, labels)
+            self._init_tensors(inputs1, inputs2)
 
-        batch_size = examples.shape[0]
+        batch_size = inputs1.shape[0]
 
         for i in range(batch_size):
             # Determine the index to store this example in the buffer
             index = self._reservoir_sampling_index(self.num_seen_examples)
-            self.num_seen_examples += 1  # Increment the counter for seen examples
+            self.num_seen_examples += 1
 
             if index >= 0:
-                self.inputs1[index] = examples[i]
-                self.inputs2[index] = labels[i]
+                self.inputs1[index] = inputs1[i]
+                self.inputs2[index] = inputs2[i]
 
     def _reservoir_sampling_index(self, num_seen_examples: int) -> int:
         """
@@ -128,19 +126,13 @@ class ReservoirBuffer:
         if self.inputs1 is None or self.inputs2 is None or self.num_seen_examples == 0:
             raise ValueError("Buffer is empty or not initialized!")
 
-            # Determine the number of available examples in the buffer
         available_size = min(self.num_seen_examples, self.buffer_size)
-
-        # Adjust the requested size if it exceeds the available size
         size = min(size, available_size)
 
-        # Randomly sample indices from the buffer
         indices = np.random.choice(available_size, size=size, replace=False)
 
-        # Apply the transformation to the sampled inputs1
         transformed_inputs1 = torch.stack([transform(to_pil_image(self.inputs1[i])) for i in indices]).to(self.device)
 
-        # Retrieve inputs2 without transformations
         sampled_inputs2 = self.inputs2[indices]
 
         return transformed_inputs1, sampled_inputs2
