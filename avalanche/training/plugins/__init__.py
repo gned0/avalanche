@@ -29,4 +29,3 @@ from .feature_distillation import *
 from .momentum_update import MomentumUpdatePlugin
 from .cassle import CaSSLePlugin
 from .pfr import PFRPlugin
-from .lump import LUMPPlugin
