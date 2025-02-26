@@ -125,6 +125,6 @@ class BYOL(SelfSupervisedMomentumModel):
             z2_target = self.target_projector(f2_target)
 
         out["p"] = [p1_online, p2_online]
-        out["z"] = [z1_target.detach(), z2_target.detach()]
+        out["z"] = [z1_target, z2_target]
 
         return out

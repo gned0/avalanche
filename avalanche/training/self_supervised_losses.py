@@ -147,7 +147,7 @@ class BYOLLoss(nn.Module):
         z2 = F.normalize(z2, dim=-1)
 
         # Mean Squared Error between p and z'
-        loss1 = 2 - 2 * (p1 * z2).sum(dim=-1)
-        loss2 = 2 - 2 * (p2 * z1).sum(dim=-1)
+        loss1 = 2 - 2 * (p1 * z2.detach()).sum(dim=-1)
+        loss2 = 2 - 2 * (p2 * z1.detach()).sum(dim=-1)
 
         return (loss1 + loss2).mean()
