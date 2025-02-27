@@ -42,7 +42,7 @@ class SimCLRTransformation(BaseTransformation):
                 'color_jitter_p': 0.8,
                 'grayscale_p': 0.2,
                 'gaussian_blur_sigma': [0.1, 2.0],
-                'gaussian_blur_p': 0.5,
+                # 'gaussian_blur_p': 0.5,
                 # No solarization
             }
         self.augmentation = self.build_pipeline(config)
