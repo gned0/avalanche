@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torchvision import models
 from torchvision.models import resnet18, resnet50
 
 
@@ -14,13 +15,20 @@ class ResNet(nn.Module):
                       Otherwise, a ResNet-50 is instantiated.
     """
 
-    def __init__(self, feature_dim: int, cifar: bool = False):
+    def __init__(self, architecture = "resnet18" , cifar: bool = False):
         super().__init__()
         self.cifar = cifar
-        self.feature_dim = feature_dim
+        self.architecture = architecture
+        self.feature_dim = 512 if architecture=="resnet18" else 2048
+
+        if architecture == "resnet18":
+            self.model = models.resnet18()
+        elif architecture == "resnet50":
+            self.model = models.resnet50()
+        else:
+            raise ValueError("Unsupported architecture. Choose 'resnet18' or 'resnet50'.")
 
         if cifar:
-            self.model = resnet18(num_classes=feature_dim)
             self.model.conv1 = nn.Conv2d(
                 in_channels=3,
                 out_channels=64,
@@ -30,10 +38,9 @@ class ResNet(nn.Module):
                 bias=False,
             )
             self.model.maxpool = nn.Identity()
-        else:
-            self.model = resnet50(num_classes=feature_dim)
 
         self.model.fc = nn.Identity()
+        print(self.model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
