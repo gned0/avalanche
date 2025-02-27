@@ -36,7 +36,7 @@ _default_eval_transform = transforms.Compose(
 )
 
 
-def SplitTinyImageNet100(
+def SplitImageNet100(
     n_experiences=10,
     *,
     return_task_id=False,
@@ -136,8 +136,8 @@ def _get_imagenet100_dataset(dataset_root):
 if __name__ == "__main__":
     import sys
 
-    benchmark_instance = SplitTinyImageNet100()
+    benchmark_instance = SplitImageNet100()
     check_vision_benchmark(benchmark_instance)
     sys.exit(0)
 
-__all__ = ["SplitTinyImageNet100"]
+__all__ = ["SplitImageNet100"]
