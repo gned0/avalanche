@@ -1,4 +1,6 @@
 import torch
+from mpl_toolkits.mplot3d.proj3d import transform
+from torchvision import transforms
 
 from avalanche.benchmarks.utils.self_supervised.base_transform import BaseTransformation
 
@@ -146,9 +148,17 @@ class AsymmetricTransformationImageNet(BaseTransformation):
         self.augmentation = self.build_pipeline(base_config)
         self.augmentation_prime = self.build_pipeline(config_prime)
 
+        self.default = transforms.Compose(
+            [
+                transforms.Resize(size),
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std),
+            ]
+        )
+
     def __call__(self, x):
         return torch.stack([
-            self.normalize(self.to_tensor(x)),
+            self.default(x),
             self.augmentation(x),
             self.augmentation_prime(x)
         ], dim=0)
