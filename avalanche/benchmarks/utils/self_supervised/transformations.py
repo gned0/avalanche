@@ -150,7 +150,7 @@ class AsymmetricTransformationImageNet(BaseTransformation):
 
         self.default = transforms.Compose(
             [
-                transforms.Resize(size),
+                transforms.Resize((size, size)),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
             ]
