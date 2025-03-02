@@ -114,3 +114,41 @@ class AsymmetricTransformation(BaseTransformation):
             self.augmentation(x),
             self.augmentation_prime(x)
         ], dim=0)
+
+class AsymmetricTransformationImageNet(BaseTransformation):
+    """
+    Asymmetric data augmentation pipeline for ImageNet images.
+    """
+    def __init__(self, mean, std, size, base_config=None):
+        super().__init__(mean, std, size)
+        if base_config is None:
+            base_config = {
+                'crop_scale': (0.08, 1.0),
+                'horizontal_flip_p': 0.5,
+                'color_jitter_params': (0.4, 0.4, 0.2, 0.1),
+                'color_jitter_p': 0.8,
+                'grayscale_p': 0.2,
+                'gaussian_blur_sigma': [0.1, 2.0],
+                'gaussian_blur_p': 1.0,
+                # No solarization.
+            }
+        config_prime = {
+            'crop_scale': (0.08, 1.0),
+            'horizontal_flip_p': 0.5,
+            'color_jitter_params': (0.4, 0.4, 0.2, 0.1),
+            'color_jitter_p': 0.8,
+            'grayscale_p': 0.2,
+            'gaussian_blur_sigma': [0.1, 2.0],
+            'gaussian_blur_p': 0.1,
+            'solarization': 0.2
+        }
+
+        self.augmentation = self.build_pipeline(base_config)
+        self.augmentation_prime = self.build_pipeline(config_prime)
+
+    def __call__(self, x):
+        return torch.stack([
+            self.normalize(self.to_tensor(x)),
+            self.augmentation(x),
+            self.augmentation_prime(x)
+        ], dim=0)
