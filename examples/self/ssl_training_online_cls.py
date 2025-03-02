@@ -1,3 +1,7 @@
+"""This example shows how to train a self-supervised model on CIFAR-100 using the Avalanche library.
+Because CIFAR-100 comes with class labels, an online classifier can be trained,
+disjointly from the SSL model via supervised learning, to evaluate the quality of the learned representations."""
+
 import argparse
 import torch
 from os.path import expanduser
