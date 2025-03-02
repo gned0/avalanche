@@ -3,7 +3,6 @@ from .ccifar100 import *
 from .ccub200 import *
 from .cfashion_mnist import *
 from .cimagenet import *
-from .cimagenet100 import *
 from .cinaturalist import *
 from .cmnist import *
 from .comniglot import *
