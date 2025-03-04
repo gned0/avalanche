@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from avalanche.core import Template
 from avalanche.models.self_supervised.simclr import SimCLR
 from avalanche.training.plugins.self_distillation import SelfDistillationPlugin
-from avalanche.training.self_supervised_losses import BarlowTwinsLoss, ContrastiveDistillLoss, BYOLLoss
+from avalanche.training.self_supervised_losses import BarlowTwinsLoss, ContrastiveDistillLoss, BYOLLoss, SimSiamLoss
 
 
 class CaSSLePlugin(SelfDistillationPlugin):
@@ -72,7 +72,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
             frozen_output = self.frozen_forward(strategy.mb_x)
             z1_frozen, z2_frozen = frozen_output["z_frozen"]
 
-            z1, z2 = strategy.mb_output["z"]
+            z1, z2 = strategy.mb_output["z_online"]
             p1 = self.distill_predictor(z1)
             p2 = self.distill_predictor(z2)
 
@@ -81,7 +81,7 @@ class CaSSLePlugin(SelfDistillationPlugin):
                 + self.distillation_loss(z1_frozen, z2_frozen, p1, p2)
             ) / 2
             return additional_term
-        elif isinstance(self.distillation_loss, BYOLLoss):
+        elif isinstance(self.distillation_loss, BYOLLoss) or isinstance(self.distillation_loss, SimSiamLoss):
             frozen_output = self.frozen_forward(strategy.mb_x)
             z1_frozen, z2_frozen = frozen_output["z_frozen"]
 
