@@ -8,9 +8,7 @@ from os.path import expanduser
 import sys
 from os.path import abspath, dirname
 
-# Add project root to the system path
 sys.path.insert(0, abspath(dirname(__file__) + "/../.."))
-
 from avalanche.benchmarks import SplitCIFAR100
 from avalanche.benchmarks.utils.self_supervised.transformations import (
     SimSiamTransformation, AsymmetricTransformation, SimCLRTransformation
@@ -33,30 +31,35 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    backbone = ResNet(feature_dim=args.feature_dim, cifar=True)
+    # Load ResNet backbone with CIFAR-specific modifications
+    backbone = ResNet(cifar=True)
     num_classes = 100
+
+    mean = (0.4914, 0.4822, 0.4465)
+    std = (0.2023, 0.1994, 0.2010)
+    size = 32
 
     if args.ssl_method == "simsiam":
         model = SimSiam(backbone=backbone, num_classes=num_classes)
-        transform = SimSiamTransformation((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+        transform = SimSiamTransformation(mean, std, size)
         loss_fn = SimSiamLoss()
     elif args.ssl_method == "barlow":
         model = BarlowTwins(backbone=backbone, num_classes=num_classes)
-        transform = AsymmetricTransformation((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+        transform = AsymmetricTransformation(mean, std, size)
         loss_fn = BarlowTwinsLoss(scale_loss=0.1)
     elif args.ssl_method == "simclr":
         model = SimCLR(backbone=backbone, num_classes=num_classes)
-        transform = SimCLRTransformation((0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762), 32)
+        transform = SimCLRTransformation(mean, std, size)
         loss_fn = NTXentLoss(temperature=0.2)
     elif args.ssl_method == "byol":
         model = BYOL(backbone=backbone, num_classes=num_classes)
-        transform = AsymmetricTransformation((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010), 32)
+        transform = AsymmetricTransformation(mean, std, size)
         loss_fn = BYOLLoss()
     else:
         raise ValueError(f"Unsupported SSL method: {args.ssl_method}")
 
     benchmark = SplitCIFAR100(
-        n_experiences=args.n_experiences,
+        n_experiences=1,
         dataset_root=expanduser("~") + "/.avalanche/data/cifar100/",
         train_transform=transform,
         eval_transform=transform,
@@ -90,7 +93,6 @@ def main(args):
     scheduler = LinearWarmupCosineAnnealingLR(
         optimizer=optimizer, warmup_epochs=10, max_epochs=args.epochs, warmup_start_lr=0.003, eta_min=1e-6
     )
-    # Add more plugins to the list if needed
     plugins = [LRSchedulerPlugin(
         scheduler=scheduler,
         step_granularity="epoch",
@@ -126,23 +128,22 @@ def main(args):
         strategy.train(experience, num_workers=8, persistent_workers=True, drop_last=True)
         strategy.eval(benchmark.test_stream[:], num_workers=8)
 
-    # Save weights
-    save_path = args.save_path
-    torch.save(model.backbone.state_dict(), save_path)
-    print(f"Model weights saved to {save_path}")
+    if args.save_path:
+        save_path = args.save_path
+        torch.save(model.backbone.state_dict(), save_path)
+        print(f"Model weights saved to {save_path}")
+    else:
+        print("Save path not provided. Skipping weight saving.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ssl_method", type=str, default="barlow",
                         help="Self-supervised learning method: simsiam, barlow, or simclr.")
-    parser.add_argument("--save_path", type=str, required=True, help="Path to save the trained model weights.")
-    parser.add_argument("--epochs", type=int, default=500, help="Number of training epochs.")
+    parser.add_argument("--save_path", type=str, default=None, help="Optional: Path to save the trained model weights.")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs.")
     parser.add_argument("--log_file", type=str, default=None,
                         help="Optional: Path to a .txt file to save text logs. If not provided, text logging is disabled.")
-    parser.add_argument("--feature_dim", type=int, default=512)
-    parser.add_argument("--backbone_checkpoint", type=str, default=None,
-                        help="Optional: Path to a checkpoint to load backbone weights. If not provided, backbone starts from scratch.")
     parser.add_argument("--tb_path", type=str, default=None,
                         help="Optional: Path to a directory to save Tensorboard logs. If not provided, Tensorboard logging is disabled.")
     args = parser.parse_args()
