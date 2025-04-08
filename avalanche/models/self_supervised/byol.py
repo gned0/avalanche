@@ -111,11 +111,13 @@ class BYOL(SelfSupervisedMomentumModel):
 
         out = super().forward(x)
 
-        f1_online, f2_online = out["f_online"]
+        f1_online, f2_online = out["f"]
         f1_target, f2_target = out["f_target"]
 
         z1_online = self.online_projector(f1_online)
         z2_online = self.online_projector(f2_online)
+
+        out["z_online"] = [z1_online, z2_online]
 
         p1_online = self.online_predictor(z1_online)
         p2_online = self.online_predictor(z2_online)

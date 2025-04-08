@@ -100,7 +100,7 @@ class SelfSupervisedMomentumModel(nn.Module):
             f_target1 = self.target_backbone(x1)
             f_target2 = self.target_backbone(x2)
 
-        out = {"f_online": [f_online1, f_online2], "f_target": [f_target1, f_target2]}
+        out = {"f": [f_online1, f_online2], "f_target": [f_target1, f_target2]}
 
         if self.classifier is not None:
             with torch.no_grad():
